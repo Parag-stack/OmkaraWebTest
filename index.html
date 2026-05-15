@@ -1,0 +1,1196 @@
+<!doctype html>
+<html lang="en" class="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Omkara — Data Room</title>
+  <meta name="description" content="Omkara Data Room — research portal." />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: { extend: { fontFamily: { sans: ['Inter','ui-sans-serif','system-ui','-apple-system','sans-serif'] } } }
+    };
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <style>
+    html, body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+    @keyframes fadeSlide { from { opacity: 0; transform: translateY(-6px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    .anim-fade-slide { animation: fadeSlide 180ms ease-out; }
+    .chip { transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease, color .15s ease; }
+    .chip:hover { transform: translateY(-2px); }
+
+    #nav-underline {
+      position: absolute; bottom: -18px; height: 2px;
+      background-color: #2563eb; border-radius: 999px;
+      transition: left .28s cubic-bezier(.4,0,.2,1), width .28s cubic-bezier(.4,0,.2,1);
+      pointer-events: none;
+    }
+
+    .hero-search-shadow {
+      box-shadow: 0 1px 2px rgba(15,23,42,0.04), 0 8px 24px -8px rgba(37,99,235,0.18), 0 24px 48px -16px rgba(15,23,42,0.10);
+    }
+    .hero-search-shadow:focus-within {
+      box-shadow: 0 1px 2px rgba(15,23,42,0.04), 0 10px 30px -8px rgba(37,99,235,0.30), 0 30px 60px -16px rgba(15,23,42,0.14);
+    }
+
+    .global-search-input { width: 440px; transition: width .25s cubic-bezier(.4,0,.2,1), box-shadow .2s ease, border-color .2s ease; }
+    .global-search-input:focus { width: 520px; }
+    @media (max-width: 1279px) {
+      .global-search-input { width: 340px; }
+      .global-search-input:focus { width: 400px; }
+    }
+
+        /* ============== Result Calendar styles ============== */
+    /* Toggle switch (shared with menu) */
+    .toggle-input { position: absolute; opacity: 0; pointer-events: none; }
+    .toggle-input + .toggle-track {
+      position: relative; display: inline-block;
+      width: 32px; height: 18px; background: #e2e8f0;
+      border-radius: 999px; transition: background-color .2s; cursor: pointer; flex-shrink: 0;
+    }
+    .toggle-input + .toggle-track::after {
+      content: ''; position: absolute; top: 2px; left: 2px;
+      width: 14px; height: 14px; background: white; border-radius: 50%;
+      transition: transform .2s; box-shadow: 0 1px 2px rgba(0,0,0,.1);
+    }
+    .toggle-input:checked + .toggle-track { background: #2563eb; }
+    .toggle-input:checked + .toggle-track::after { transform: translateX(14px); }
+    .toggle-input:focus-visible + .toggle-track { box-shadow: 0 0 0 3px rgba(37,99,235,.25); }
+    .dark .toggle-input + .toggle-track { background: #334155; }
+
+    /* Auto-fit calendar grid (no horizontal scroll) */
+    .cal-grid {
+      display: grid;
+      width: 100%;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      overflow: hidden;
+      background: white;
+    }
+    .dark .cal-grid { border-color: #1e293b; background: #0f172a; }
+
+    .cal-col {
+      display: flex; flex-direction: column;
+      border-right: 1px solid #f1f5f9;
+      min-width: 0;
+      overflow: hidden;
+    }
+    .cal-col:last-child { border-right: 0; }
+    .dark .cal-col { border-right-color: #1e293b; }
+
+    .cal-header {
+      background: #0f172a; color: white;
+      padding: 8px 10px;
+      font-size: 11px; font-weight: 600;
+      display: flex; align-items: center; justify-content: space-between; gap: 6px;
+      border-bottom: 1px solid #1e293b;
+      flex-shrink: 0;
+    }
+    .cal-header .cal-date { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    .cal-header .cal-dow { opacity: .65; font-weight: 500; }
+    .cal-header .cal-count {
+      background: rgba(255,255,255,.14); padding: 1px 7px; border-radius: 999px;
+      font-size: 10px; font-weight: 700; flex-shrink: 0; min-width: 22px; text-align: center;
+    }
+
+    .cal-body { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
+    .cal-body::-webkit-scrollbar { width: 6px; }
+    .cal-body::-webkit-scrollbar-track { background: transparent; }
+    .cal-body::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+    .cal-body::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+    .cal-company {
+      padding: 5px 10px;
+      font-size: 11.5px;
+      color: #0f172a;
+      border-bottom: 1px solid #f8fafc;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      cursor: default; transition: background-color .12s;
+    }
+    .cal-company:hover { background: #f1f5f9; }
+    .cal-company-red { color: #D2042D; }
+    .dark .cal-company { color: #e2e8f0; border-bottom-color: #1e293b; }
+    .dark .cal-company:hover { background: #1e293b; }
+
+    /* Skeleton shimmer */
+    @keyframes shimmer { 0% { background-position: -200px 0; } 100% { background-position: 200px 0; } }
+    .skeleton {
+      background: linear-gradient(90deg, #e2e8f0 0%, #f1f5f9 50%, #e2e8f0 100%);
+      background-size: 400px 100%; animation: shimmer 1.4s infinite linear;
+      border-radius: 4px; display: inline-block; height: 9px;
+    }
+
+    /* ─── Filter bar pill buttons ─── */
+    .pill-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 7px 12px; border-radius: 8px;
+      border: 1px solid #e2e8f0; background: white;
+      font-size: 12.5px; font-weight: 500; color: #334155;
+      transition: border-color .15s, box-shadow .15s;
+      cursor: pointer; white-space: nowrap;
+    }
+    .pill-btn:hover { border-color: #cbd5e1; }
+    .pill-btn.active { border-color: #93c5fd; box-shadow: 0 0 0 3px rgba(37,99,235,.10); }
+    .dark .pill-btn { background: #0f172a; border-color: #334155; color: #cbd5e1; }
+    .dark .pill-btn:hover { border-color: #475569; }
+    .pill-btn .pill-x {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 16px; height: 16px; margin-left: 2px; border-radius: 4px;
+      color: #94a3b8;
+    }
+    .pill-btn .pill-x:hover { background: #f1f5f9; color: #334155; }
+
+    /* ─── Date range picker ─── */
+    .dp-panel {
+      position: absolute; top: calc(100% + 6px); left: 0; z-index: 50;
+      width: 280px; padding: 12px;
+      background: white; border: 1px solid #e2e8f0; border-radius: 12px;
+      box-shadow: 0 10px 30px -8px rgba(15,23,42,.15);
+    }
+    .dark .dp-panel { background: #0f172a; border-color: #334155; }
+    .dp-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .dp-current { font-size: 12px; font-weight: 700; color: #2563eb; letter-spacing: .04em; }
+    .dp-nav { display: flex; gap: 4px; }
+    .dp-nav button {
+      width: 26px; height: 26px; border-radius: 6px; color: #2563eb;
+      display: flex; align-items: center; justify-content: center; cursor: pointer;
+    }
+    .dp-nav button:hover { background: #eff6ff; }
+    .dp-dow { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 10.5px; color: #94a3b8; font-weight: 600; padding-bottom: 6px; }
+    .dp-month-name { padding: 4px 2px; font-size: 11px; font-weight: 700; color: #475569; letter-spacing: .04em; }
+    .dark .dp-month-name { color: #cbd5e1; }
+    .dp-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+    .dp-cell {
+      aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+      font-size: 12px; color: #334155; border-radius: 6px; cursor: pointer;
+      transition: background-color .12s;
+    }
+    .dp-cell.empty { cursor: default; }
+    .dp-cell:not(.empty):hover { background: #eff6ff; }
+    .dp-cell.in-range { background: #dbeafe; color: #1e40af; border-radius: 0; }
+    .dp-cell.endpoint { background: #2563eb; color: white; border-radius: 999px; font-weight: 700; }
+    .dp-cell.range-start { border-top-left-radius: 999px; border-bottom-left-radius: 999px; }
+    .dp-cell.range-end { border-top-right-radius: 999px; border-bottom-right-radius: 999px; }
+    .dark .dp-cell { color: #cbd5e1; }
+    .dark .dp-cell:not(.empty):hover { background: #1e3a8a; }
+
+    /* ─── Market Cap dropdown ─── */
+    .mcap-panel {
+      position: absolute; top: calc(100% + 6px); left: 0; z-index: 50;
+      width: 320px; padding: 14px 16px;
+      background: white; border: 1px solid #e2e8f0; border-radius: 12px;
+      box-shadow: 0 10px 30px -8px rgba(15,23,42,.15);
+    }
+    .dark .mcap-panel { background: #0f172a; border-color: #334155; }
+    .mcap-title { font-size: 13px; font-weight: 700; color: #0f172a; margin-bottom: 14px; display: flex; align-items: center; gap: 6px; }
+    .mcap-title .mcap-sub { font-size: 11px; font-weight: 500; color: #94a3b8; }
+    .dark .mcap-title { color: white; }
+
+    .mcap-slider-wrap { position: relative; height: 24px; margin: 12px 6px; }
+    .mcap-track { position: absolute; top: 50%; left: 0; right: 0; height: 4px; transform: translateY(-50%); background: #e2e8f0; border-radius: 999px; }
+    .mcap-fill { position: absolute; top: 50%; height: 4px; transform: translateY(-50%); background: #2563eb; border-radius: 999px; }
+    .mcap-slider {
+      position: absolute; inset: 0; width: 100%; -webkit-appearance: none; appearance: none;
+      background: transparent; pointer-events: none;
+    }
+    .mcap-slider::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none; pointer-events: auto;
+      width: 18px; height: 18px; border-radius: 50%; background: white;
+      border: 2px solid #2563eb; cursor: grab;
+      box-shadow: 0 1px 3px rgba(0,0,0,.15);
+    }
+    .mcap-slider::-moz-range-thumb {
+      pointer-events: auto;
+      width: 18px; height: 18px; border-radius: 50%; background: white;
+      border: 2px solid #2563eb; cursor: grab;
+      box-shadow: 0 1px 3px rgba(0,0,0,.15);
+    }
+
+    .mcap-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+    .mcap-inputs label { display: block; font-size: 10px; font-weight: 600; color: #64748b; margin-bottom: 4px; text-transform: uppercase; letter-spacing: .04em; }
+    .mcap-inputs input { width: 100%; padding: 7px 9px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; outline: none; }
+    .mcap-inputs input:focus { border-color: #93c5fd; box-shadow: 0 0 0 3px rgba(37,99,235,.10); }
+    .dark .mcap-inputs input { background: #1e293b; border-color: #334155; color: white; }
+  </style>
+</head>
+
+<body class="bg-white text-slate-800 dark:bg-slate-950 dark:text-slate-100 antialiased min-h-screen overflow-x-hidden">
+
+  <!-- ============== Top navigation ============== -->
+  <header class="relative z-30 border-b border-slate-100 dark:border-slate-900">
+    <div class="mx-auto flex max-w-screen-2xl items-center justify-between gap-6 px-6 py-4 md:px-10">
+
+      <div class="flex items-center gap-8">
+        <a href="#" data-route="home" class="flex select-none items-center gap-3">
+          <img src="data:image/png;base64,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" alt="Omkara" class="h-10 w-auto shrink-0" />
+          <div class="leading-tight">
+            <div class="flex items-center gap-1.5">
+              <span class="text-[17px] font-bold tracking-tight text-slate-900 dark:text-white">Omkara</span>
+              <span class="rounded-md bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-600 dark:bg-rose-500/15 dark:text-rose-300">v1.1.0</span>
+            </div>
+            <div class="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Data Room</div>
+          </div>
+        </a>
+
+        <nav id="primary-nav" class="relative hidden items-center gap-7 lg:flex">
+          <a href="#" data-nav="bse-news" class="nav-item text-sm font-medium text-blue-600">BSE News</a>
+          <button id="quicklinks-trigger" data-nav="quick-links" type="button"
+                  class="nav-item flex items-center gap-1 text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white">
+            Quick links
+            <svg id="ql-chevron" class="h-3.5 w-3.5 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </button>
+          <span id="nav-underline"></span>
+        </nav>
+      </div>
+
+      <div class="flex items-center gap-3 pr-2 md:pr-6">
+        <label class="relative hidden items-center md:flex">
+          <svg class="pointer-events-none absolute left-4 h-4 w-4 text-slate-400 dark:text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input id="global-search" type="text" placeholder="Search for any company, sector or theme..."
+                 class="global-search-input h-10 rounded-full border border-slate-200 bg-white pl-11 pr-16 text-sm text-slate-700 placeholder:text-slate-400 outline-none focus:border-blue-400 focus:shadow-md focus:shadow-blue-100/60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:placeholder:text-slate-500 dark:focus:shadow-blue-900/30" />
+          <kbd class="pointer-events-none absolute right-3 rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">⌘ K</kbd>
+        </label>
+
+        <div class="relative" id="dropdown-root">
+          <button id="avatar-btn"
+                  class="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2 py-1 pr-3 hover:border-slate-300 hover:shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:hover:border-slate-600">
+            <span class="inline-flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full ring-2 ring-white dark:ring-slate-900"><svg viewBox="0 0 80 80" class="h-full w-full">
+  <defs>
+    <linearGradient id="av-bg-nav" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fef3e7"/><stop offset="100%" stop-color="#f8d9b8"/></linearGradient>
+    <linearGradient id="av-skin-nav" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f3c89b"/><stop offset="100%" stop-color="#dca176"/></linearGradient>
+    <linearGradient id="av-hair-nav" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2a1a10"/><stop offset="100%" stop-color="#140a06"/></linearGradient>
+    <linearGradient id="av-suit-nav" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1f2937"/><stop offset="100%" stop-color="#0b1220"/></linearGradient>
+  </defs>
+  <circle cx="40" cy="40" r="40" fill="url(#av-bg-nav)"/>
+  <path d="M10 80 C 12 62, 68 62, 70 80 Z" fill="url(#av-suit-nav)"/>
+  <path d="M32 60 L 40 72 L 48 60 L 50 80 L 30 80 Z" fill="#ffffff"/>
+  <path d="M32 60 L 40 70 L 48 60" stroke="#cbd5e1" stroke-width="0.6" fill="none" stroke-linecap="round"/>
+  <path d="M38.5 60 L 41.5 60 L 43 80 L 37 80 Z" fill="#1d4ed8"/>
+  <path d="M38.5 60 L 41.5 60 L 40 64 Z" fill="#1e40af"/>
+  <path d="M34 52 L 34 62 Q 40 66, 46 62 L 46 52 Z" fill="url(#av-skin-nav)"/>
+  <path d="M34 52 Q 40 56, 46 52 L 46 54 Q 40 58, 34 54 Z" fill="#000" opacity="0.08"/>
+  <path d="M27 38 Q 27 22, 40 22 Q 53 22, 53 38 Q 53 50, 47 54 Q 40 58, 33 54 Q 27 50, 27 38 Z" fill="url(#av-skin-nav)"/>
+  <path d="M28 42 Q 33 53, 40 56 Q 47 53, 52 42 Q 50 50, 40 54 Q 30 50, 28 42 Z" fill="#000" opacity="0.06"/>
+  <path d="M26 36 Q 24 18, 40 17 Q 56 18, 54 36 Q 54 30, 50 27 Q 46 25, 41 26 Q 37 27, 34 30 Q 30 31, 28 35 Q 27 36, 26 36 Z" fill="url(#av-hair-nav)"/>
+  <path d="M27 32 L 27 40 L 29 40 L 29 33 Z" fill="url(#av-hair-nav)"/>
+  <path d="M53 32 L 53 40 L 51 40 L 51 33 Z" fill="url(#av-hair-nav)"/>
+  <path d="M32 24 Q 36 21, 42 21 Q 38 23, 35 26 Z" fill="#fff" opacity="0.08"/>
+  <path d="M31.5 35 Q 34 33.5, 37 35" stroke="#1a0f06" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+  <path d="M43 35 Q 46 33.5, 48.5 35" stroke="#1a0f06" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+  <ellipse cx="34.2" cy="39.5" rx="1.5" ry="1.7" fill="#1a0f06"/>
+  <ellipse cx="45.8" cy="39.5" rx="1.5" ry="1.7" fill="#1a0f06"/>
+  <circle cx="34.7" cy="39" r="0.45" fill="#fff"/>
+  <circle cx="46.3" cy="39" r="0.45" fill="#fff"/>
+  <path d="M40 41 Q 39.7 45, 41 46.5 Q 40 47, 39 46.5" stroke="#b88359" stroke-width="0.6" fill="none" stroke-linecap="round"/>
+  <path d="M36 49.5 Q 40 51.5, 44 49.5" stroke="#7a3826" stroke-width="0.9" fill="none" stroke-linecap="round"/>
+  <path d="M37 48.5 Q 40 49.5, 43 48.5" stroke="#a85a47" stroke-width="0.5" fill="none" stroke-linecap="round" opacity="0.6"/>
+  <ellipse cx="40" cy="51.5" rx="6" ry="1.5" fill="#2a1a10" opacity="0.08"/>
+  <ellipse cx="32" cy="46" rx="2.5" ry="1.8" fill="#e89c7c" opacity="0.35"/>
+  <ellipse cx="48" cy="46" rx="2.5" ry="1.8" fill="#e89c7c" opacity="0.35"/>
+</svg></span>
+            <span class="text-sm font-medium">Parag</span>
+            <svg class="h-3.5 w-3.5 fill-blue-500 text-blue-500" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M12 2l2.95 6.9L22 9.27l-5.5 4.77L18.18 22 12 18.27 5.82 22l1.68-7.96L2 9.27l7.05-.37L12 2z"/></svg>
+            <svg id="chevron" class="h-4 w-4 text-slate-500 transition-transform dark:text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </button>
+
+          <div id="dropdown-panel" class="absolute right-0 top-full z-50 mt-2 hidden w-72 origin-top-right rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-slate-800 dark:bg-slate-900">
+            <div class="flex items-start gap-3 px-5 pt-5 pb-4">
+              <span class="inline-flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full ring-2 ring-white dark:ring-slate-900"><svg viewBox="0 0 80 80" class="h-full w-full">
+  <defs>
+    <linearGradient id="av-bg-drop" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fef3e7"/><stop offset="100%" stop-color="#f8d9b8"/></linearGradient>
+    <linearGradient id="av-skin-drop" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f3c89b"/><stop offset="100%" stop-color="#dca176"/></linearGradient>
+    <linearGradient id="av-hair-drop" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2a1a10"/><stop offset="100%" stop-color="#140a06"/></linearGradient>
+    <linearGradient id="av-suit-drop" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1f2937"/><stop offset="100%" stop-color="#0b1220"/></linearGradient>
+  </defs>
+  <circle cx="40" cy="40" r="40" fill="url(#av-bg-drop)"/>
+  <path d="M10 80 C 12 62, 68 62, 70 80 Z" fill="url(#av-suit-drop)"/>
+  <path d="M32 60 L 40 72 L 48 60 L 50 80 L 30 80 Z" fill="#ffffff"/>
+  <path d="M32 60 L 40 70 L 48 60" stroke="#cbd5e1" stroke-width="0.6" fill="none" stroke-linecap="round"/>
+  <path d="M38.5 60 L 41.5 60 L 43 80 L 37 80 Z" fill="#1d4ed8"/>
+  <path d="M38.5 60 L 41.5 60 L 40 64 Z" fill="#1e40af"/>
+  <path d="M34 52 L 34 62 Q 40 66, 46 62 L 46 52 Z" fill="url(#av-skin-drop)"/>
+  <path d="M34 52 Q 40 56, 46 52 L 46 54 Q 40 58, 34 54 Z" fill="#000" opacity="0.08"/>
+  <path d="M27 38 Q 27 22, 40 22 Q 53 22, 53 38 Q 53 50, 47 54 Q 40 58, 33 54 Q 27 50, 27 38 Z" fill="url(#av-skin-drop)"/>
+  <path d="M28 42 Q 33 53, 40 56 Q 47 53, 52 42 Q 50 50, 40 54 Q 30 50, 28 42 Z" fill="#000" opacity="0.06"/>
+  <path d="M26 36 Q 24 18, 40 17 Q 56 18, 54 36 Q 54 30, 50 27 Q 46 25, 41 26 Q 37 27, 34 30 Q 30 31, 28 35 Q 27 36, 26 36 Z" fill="url(#av-hair-drop)"/>
+  <path d="M27 32 L 27 40 L 29 40 L 29 33 Z" fill="url(#av-hair-drop)"/>
+  <path d="M53 32 L 53 40 L 51 40 L 51 33 Z" fill="url(#av-hair-drop)"/>
+  <path d="M32 24 Q 36 21, 42 21 Q 38 23, 35 26 Z" fill="#fff" opacity="0.08"/>
+  <path d="M31.5 35 Q 34 33.5, 37 35" stroke="#1a0f06" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+  <path d="M43 35 Q 46 33.5, 48.5 35" stroke="#1a0f06" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+  <ellipse cx="34.2" cy="39.5" rx="1.5" ry="1.7" fill="#1a0f06"/>
+  <ellipse cx="45.8" cy="39.5" rx="1.5" ry="1.7" fill="#1a0f06"/>
+  <circle cx="34.7" cy="39" r="0.45" fill="#fff"/>
+  <circle cx="46.3" cy="39" r="0.45" fill="#fff"/>
+  <path d="M40 41 Q 39.7 45, 41 46.5 Q 40 47, 39 46.5" stroke="#b88359" stroke-width="0.6" fill="none" stroke-linecap="round"/>
+  <path d="M36 49.5 Q 40 51.5, 44 49.5" stroke="#7a3826" stroke-width="0.9" fill="none" stroke-linecap="round"/>
+  <path d="M37 48.5 Q 40 49.5, 43 48.5" stroke="#a85a47" stroke-width="0.5" fill="none" stroke-linecap="round" opacity="0.6"/>
+  <ellipse cx="40" cy="51.5" rx="6" ry="1.5" fill="#2a1a10" opacity="0.08"/>
+  <ellipse cx="32" cy="46" rx="2.5" ry="1.8" fill="#e89c7c" opacity="0.35"/>
+  <ellipse cx="48" cy="46" rx="2.5" ry="1.8" fill="#e89c7c" opacity="0.35"/>
+</svg></span>
+              <div class="min-w-0">
+                <p class="truncate font-semibold">Parag Kadve</p>
+                <p class="truncate text-xs text-slate-500 dark:text-slate-400">parag@omkaracapital.in</p>
+              </div>
+            </div>
+            <div class="border-t border-slate-100 dark:border-slate-800"></div>
+            <div class="px-2 py-2">
+              <a href="#" class="flex items-center gap-2 rounded-lg px-2 py-1 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800">
+                <span class="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 dark:border-slate-700"><svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+                Account
+              </a>
+              <a href="#" class="flex items-center gap-2 rounded-lg px-2 py-1 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800">
+                <span class="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 dark:border-slate-700"><svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg></span>
+                Watchlists
+              </a>
+              <a href="#" class="flex items-center gap-2 rounded-lg px-2 py-1 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800">
+                <span class="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 dark:border-slate-700"><svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></span>
+                Logout
+              </a>
+            </div>
+            <div class="border-t border-slate-100 dark:border-slate-800"></div>
+            <div class="flex items-center justify-center gap-1 p-3">
+              <button data-theme="system" class="theme-btn flex h-9 w-12 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800" aria-label="System">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+              </button>
+              <button data-theme="light" class="theme-btn flex h-9 w-12 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800" aria-label="Light">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+              </button>
+              <button data-theme="dark" class="theme-btn flex h-9 w-12 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800" aria-label="Dark">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============== Quick Links mega menu ============== -->
+    <div id="quicklinks-panel"
+         class="absolute left-4 right-4 top-full z-40 hidden mt-2 origin-top rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-slate-800 dark:bg-slate-900 md:left-10 md:right-auto md:mt-2 md:w-auto">
+      <div class="flex flex-col md:flex-row">
+        
+          <div class="w-[170px] shrink-0 px-2 py-3">
+            <h3 class="px-2 pb-1.5 text-base font-bold tracking-tight text-slate-900 dark:text-white">Earning Tracker</h3>
+            <div class="flex flex-col gap-0.5">
+              <a href="#" data-route="result-calendar" class="ql-item group flex items-center gap-2 rounded-lg px-2 py-1 text-sm text-slate-700 transition-colors hover:bg-blue-50/50 hover:text-blue-600 dark:text-slate-300 dark:hover:bg-blue-500/10 dark:hover:text-blue-400">
+                <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition-colors group-hover:border-blue-400 group-hover:bg-white group-hover:text-blue-600 dark:border-slate-700 dark:text-slate-400 dark:group-hover:border-blue-500 dark:group-hover:bg-slate-900 dark:group-hover:text-blue-400">
+                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M9 16l2 2 4-4"/></svg>
+                </span>
+                <span class="font-medium">Result Calendar</span>
+              </a>
+              <a href="#" class="ql-item group flex items-center gap-2 rounded-lg px-2 py-1 text-sm text-slate-700 transition-colors hover:bg-blue-50/50 hover:text-blue-600 dark:text-slate-300 dark:hover:bg-blue-500/10 dark:hover:text-blue-400">
+                <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition-colors group-hover:border-blue-400 group-hover:bg-white group-hover:text-blue-600 dark:border-slate-700 dark:text-slate-400 dark:group-hover:border-blue-500 dark:group-hover:bg-slate-900 dark:group-hover:text-blue-400">
+                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="20" x2="21" y2="20"/><rect x="5" y="13" width="3" height="7"/><rect x="10.5" y="9" width="3" height="11"/><rect x="16" y="6" width="3" height="14"/><polyline points="5 9 11 5 15 8 21 4"/></svg>
+                </span>
+                <span class="font-medium">Result Data</span>
+              </a>
+            </div>
+          </div>
+          <div class="w-[170px] shrink-0 px-2 py-3 border-l border-slate-100 dark:border-slate-800">
+            <h3 class="px-2 pb-1.5 text-base font-bold tracking-tight text-slate-900 dark:text-white">Report Bank</h3>
+            <div class="flex flex-col gap-0.5">
+              <a href="#" class="ql-item group flex items-center gap-2 rounded-lg px-2 py-1 text-sm text-slate-700 transition-colors hover:bg-blue-50/50 hover:text-blue-600 dark:text-slate-300 dark:hover:bg-blue-500/10 dark:hover:text-blue-400">
+                <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition-colors group-hover:border-blue-400 group-hover:bg-white group-hover:text-blue-600 dark:border-slate-700 dark:text-slate-400 dark:group-hover:border-blue-500 dark:group-hover:bg-slate-900 dark:group-hover:text-blue-400">
+                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="20" y1="20" x2="16.65" y2="16.65"/></svg>
+                </span>
+                <span class="font-medium">Search</span>
+              </a>
+              <a href="#" class="ql-item group flex items-center gap-2 rounded-lg px-2 py-1 text-sm text-slate-700 transition-colors hover:bg-blue-50/50 hover:text-blue-600 dark:text-slate-300 dark:hover:bg-blue-500/10 dark:hover:text-blue-400">
+                <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition-colors group-hover:border-blue-400 group-hover:bg-white group-hover:text-blue-600 dark:border-slate-700 dark:text-slate-400 dark:group-hover:border-blue-500 dark:group-hover:bg-slate-900 dark:group-hover:text-blue-400">
+                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                </span>
+                <span class="font-medium">Upload</span>
+              </a>
+            </div>
+          </div>
+          <div class="w-[170px] shrink-0 px-2 py-3 border-l border-slate-100 dark:border-slate-800">
+            <h3 class="px-2 pb-1.5 text-base font-bold tracking-tight text-slate-900 dark:text-white">Market Pulse</h3>
+            <div class="flex flex-col gap-0.5">
+              <a href="#" class="ql-item group flex items-center gap-2 rounded-lg px-2 py-1 text-sm text-slate-700 transition-colors hover:bg-blue-50/50 hover:text-blue-600 dark:text-slate-300 dark:hover:bg-blue-500/10 dark:hover:text-blue-400">
+                <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition-colors group-hover:border-blue-400 group-hover:bg-white group-hover:text-blue-600 dark:border-slate-700 dark:text-slate-400 dark:group-hover:border-blue-500 dark:group-hover:bg-slate-900 dark:group-hover:text-blue-400">
+                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 3 7 12 12 21 7 12 2"/><polyline points="3 17 12 22 21 17"/><polyline points="3 12 12 17 21 12"/></svg>
+                </span>
+                <span class="font-medium">Bulk/Block Deal</span>
+              </a>
+              <a href="#" class="ql-item group flex items-center gap-2 rounded-lg px-2 py-1 text-sm text-slate-700 transition-colors hover:bg-blue-50/50 hover:text-blue-600 dark:text-slate-300 dark:hover:bg-blue-500/10 dark:hover:text-blue-400">
+                <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition-colors group-hover:border-blue-400 group-hover:bg-white group-hover:text-blue-600 dark:border-slate-700 dark:text-slate-400 dark:group-hover:border-blue-500 dark:group-hover:bg-slate-900 dark:group-hover:text-blue-400">
+                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 3h13v13H1z"/><path d="M14 8h4l3 3v5h-7"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="17.5" cy="18.5" r="2.5"/></svg>
+                </span>
+                <span class="font-medium">Delivery Data</span>
+              </a>
+              <a href="#" class="ql-item group flex items-center gap-2 rounded-lg px-2 py-1 text-sm text-slate-700 transition-colors hover:bg-blue-50/50 hover:text-blue-600 dark:text-slate-300 dark:hover:bg-blue-500/10 dark:hover:text-blue-400">
+                <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition-colors group-hover:border-blue-400 group-hover:bg-white group-hover:text-blue-600 dark:border-slate-700 dark:text-slate-400 dark:group-hover:border-blue-500 dark:group-hover:bg-slate-900 dark:group-hover:text-blue-400">
+                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                </span>
+                <span class="font-medium">Insider Trading</span>
+              </a>
+              <a href="#" class="ql-item group flex items-center gap-2 rounded-lg px-2 py-1 text-sm text-slate-700 transition-colors hover:bg-blue-50/50 hover:text-blue-600 dark:text-slate-300 dark:hover:bg-blue-500/10 dark:hover:text-blue-400">
+                <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition-colors group-hover:border-blue-400 group-hover:bg-white group-hover:text-blue-600 dark:border-slate-700 dark:text-slate-400 dark:group-hover:border-blue-500 dark:group-hover:bg-slate-900 dark:group-hover:text-blue-400">
+                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="21"/><rect x="4" y="7" width="4" height="7"/><line x1="14" y1="3" x2="14" y2="21"/><rect x="12" y="10" width="4" height="9"/></svg>
+                </span>
+                <span class="font-medium">Price Action</span>
+              </a>
+              <a href="#" class="ql-item group flex items-center gap-2 rounded-lg px-2 py-1 text-sm text-slate-700 transition-colors hover:bg-blue-50/50 hover:text-blue-600 dark:text-slate-300 dark:hover:bg-blue-500/10 dark:hover:text-blue-400">
+                <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition-colors group-hover:border-blue-400 group-hover:bg-white group-hover:text-blue-600 dark:border-slate-700 dark:text-slate-400 dark:group-hover:border-blue-500 dark:group-hover:bg-slate-900 dark:group-hover:text-blue-400">
+                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v10"/><path d="M15 9.5c-.5-1-1.5-1.5-3-1.5s-3 .7-3 2 1.3 1.7 3 2 3 .7 3 2-1.5 2-3 2-2.5-.5-3-1.5"/></svg>
+                </span>
+                <span class="font-medium">Valuations</span>
+              </a>
+            </div>
+          </div>
+          <div class="w-[170px] shrink-0 px-2 py-3 border-l border-slate-100 dark:border-slate-800">
+            <h3 class="px-2 pb-1.5 text-base font-bold tracking-tight text-slate-900 dark:text-white">Deep Dive</h3>
+            <div class="flex flex-col gap-0.5">
+              <a href="#" class="ql-item group flex items-center gap-2 rounded-lg px-2 py-1 text-sm text-slate-700 transition-colors hover:bg-blue-50/50 hover:text-blue-600 dark:text-slate-300 dark:hover:bg-blue-500/10 dark:hover:text-blue-400">
+                <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition-colors group-hover:border-blue-400 group-hover:bg-white group-hover:text-blue-600 dark:border-slate-700 dark:text-slate-400 dark:group-hover:border-blue-500 dark:group-hover:bg-slate-900 dark:group-hover:text-blue-400">
+                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                </span>
+                <span class="font-medium">FII Fortnightly</span>
+              </a>
+              <a href="#" class="ql-item group flex items-center gap-2 rounded-lg px-2 py-1 text-sm text-slate-700 transition-colors hover:bg-blue-50/50 hover:text-blue-600 dark:text-slate-300 dark:hover:bg-blue-500/10 dark:hover:text-blue-400">
+                <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition-colors group-hover:border-blue-400 group-hover:bg-white group-hover:text-blue-600 dark:border-slate-700 dark:text-slate-400 dark:group-hover:border-blue-500 dark:group-hover:bg-slate-900 dark:group-hover:text-blue-400">
+                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+                </span>
+                <span class="font-medium">Sector Analysis</span>
+              </a>
+            </div>
+          </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============== View: Home ============== -->
+  <section id="view-home" class="relative z-10 mx-auto flex max-w-4xl flex-col items-center justify-center px-6 pb-12 text-center" style="min-height: calc(100vh - 73px);">
+    <div class="mx-auto" style="max-width: 673px;">
+      <div class="hero-search-shadow group relative flex items-center rounded-full border border-slate-200 bg-white transition-all focus-within:border-blue-400 dark:border-slate-700 dark:bg-slate-900" style="min-height: 57px;">
+        <svg class="ml-5 h-5 w-5 text-slate-400 dark:text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input id="search-input" type="text" placeholder="Search for stocks to analyse" class="flex-1 bg-transparent px-3 py-[17px] text-sm outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500" />
+        <kbd class="mr-3 hidden rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 md:inline-flex dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">⌘ K</kbd>
+      </div>
+      <div id="chips-row" class="mt-7 flex flex-wrap items-center justify-center gap-2"></div>
+    </div>
+  </section>
+
+  <!-- ============== View: Result Calendar ============== -->
+  <section id="view-result-calendar" class="relative z-10 hidden">
+    <div class="mx-auto max-w-screen-2xl px-6 py-6 md:px-10">
+
+      <!-- Breadcrumb + title -->
+      <div class="mb-5">
+        <nav class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+          <a href="#" data-route="home" class="hover:text-blue-600">Home</a>
+          <span>/</span>
+          <span>Quick links</span>
+          <span>/</span>
+          <span>Earning Tracker</span>
+          <span>/</span>
+          <span class="font-medium text-slate-700 dark:text-slate-200">Result Calendar</span>
+        </nav>
+
+      </div>
+
+            <!-- Filter bar -->
+      <div class="mb-4 rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div class="flex flex-wrap items-center gap-2">
+
+          <!-- Search -->
+          <label class="relative flex items-center">
+            <svg class="pointer-events-none absolute left-3 h-3.5 w-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input id="rc-search" type="text" placeholder="Search company..."
+                   class="h-9 w-52 rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-xs text-slate-700 placeholder:text-slate-400 outline-none focus:border-blue-400 focus:shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:placeholder:text-slate-500" />
+          </label>
+
+          <!-- Duration (date range) -->
+          <div class="relative" id="rc-duration-root">
+            <button id="rc-duration-btn" type="button" class="pill-btn">
+              <svg class="h-3.5 w-3.5 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+              </svg>
+              <span class="text-slate-500">Duration:</span>
+              <span id="rc-duration-label" class="font-semibold text-slate-700 dark:text-slate-200">—</span>
+              <svg class="h-3 w-3 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+            <div id="rc-duration-panel" class="dp-panel hidden"></div>
+          </div>
+
+          <!-- Market Cap -->
+          <div class="relative" id="rc-mcap-root">
+            <button id="rc-mcap-btn" type="button" class="pill-btn">
+              <span class="text-slate-500">Market Cap</span>
+              <span id="rc-mcap-cmp" class="text-slate-400">≥</span>
+              <span id="rc-mcap-label" class="font-semibold text-slate-700 dark:text-slate-200">500</span>
+              <span class="text-slate-500">Cr</span>
+              <svg class="h-3 w-3 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              <span id="rc-mcap-clear" class="pill-x hidden" title="Clear">
+                <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </span>
+            </button>
+            <div id="rc-mcap-panel" class="mcap-panel hidden">
+              <div class="mcap-title">Market Capitalisation <span class="mcap-sub">in Crore Rupees</span></div>
+              <div class="mcap-slider-wrap">
+                <div class="mcap-track"></div>
+                <div class="mcap-fill" id="rc-mcap-fill"></div>
+                <input type="range" class="mcap-slider" id="rc-mcap-slider-min" min="0" max="2000000" step="100" value="0">
+                <input type="range" class="mcap-slider" id="rc-mcap-slider-max" min="0" max="2000000" step="100" value="2000000">
+              </div>
+              <div class="mcap-inputs">
+                <div>
+                  <label>Min</label>
+                  <input id="rc-mcap-min" type="number" value="500" min="0">
+                </div>
+                <div>
+                  <label>Max</label>
+                  <input id="rc-mcap-max" type="number" value="2000000" min="0">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Portfolio checkbox -->
+          <label class="inline-flex cursor-pointer items-center gap-2 pl-2">
+            <input id="rc-portfolio" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+            <span class="text-xs font-medium text-slate-600 dark:text-slate-300">Portfolio</span>
+          </label>
+
+          <!-- Sample data toggle -->
+          <label class="inline-flex cursor-pointer items-center gap-2 pl-2">
+            <input id="rc-demo" type="checkbox" class="toggle-input">
+            <span class="toggle-track"></span>
+            <span class="text-xs font-medium text-slate-600 dark:text-slate-300">Sample data</span>
+          </label>
+
+          <!-- Status (right side) -->
+          <p id="rc-status" class="ml-auto text-xs text-slate-500 dark:text-slate-400">Ready</p>
+        </div>
+      </div>
+
+      <!-- Results grid -->
+      <div id="rc-grid"></div>
+    </div>
+  </section>
+
+  <script>
+    const popularStocks = ["Larsen & Toubro","HDFC Bank","MCX","Sun Pharmaceutical","Voltas","Paras Defence Space Tech","PNB Gilts"];
+    const chipsRow = document.getElementById("chips-row");
+    chipsRow.innerHTML = popularStocks.map(s => `
+      <button class="chip rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-medium text-slate-600 hover:border-blue-400 hover:text-blue-600 hover:shadow-sm dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300 dark:hover:border-blue-500 dark:hover:text-blue-400" data-stock="${s}">${s}</button>`).join("");
+    chipsRow.addEventListener("click", e => {
+      const btn = e.target.closest("[data-stock]");
+      if (btn) document.getElementById("search-input").value = btn.dataset.stock;
+    });
+
+    const navItems = document.querySelectorAll(".nav-item");
+    const underline = document.getElementById("nav-underline");
+    const nav = document.getElementById("primary-nav");
+
+    function moveUnderlineTo(el) {
+      if (!el || !underline || !nav) return;
+      const navRect = nav.getBoundingClientRect();
+      const elRect  = el.getBoundingClientRect();
+      underline.style.left  = (elRect.left - navRect.left) + "px";
+      underline.style.width = elRect.width + "px";
+    }
+    function setActive(el) {
+      navItems.forEach(n => {
+        n.classList.remove("text-blue-600");
+        n.classList.add("text-slate-600","hover:text-slate-900","dark:text-slate-300","dark:hover:text-white");
+      });
+      el.classList.add("text-blue-600");
+      el.classList.remove("text-slate-600","hover:text-slate-900","dark:text-slate-300","dark:hover:text-white");
+      moveUnderlineTo(el);
+    }
+    navItems.forEach(item => item.addEventListener("click", e => {
+      if (item.id !== "quicklinks-trigger") e.preventDefault();
+      setActive(item);
+    }));
+
+    const initialActive = document.querySelector('.nav-item.text-blue-600') || navItems[0];
+    function placeInitial() { moveUnderlineTo(initialActive); }
+    window.addEventListener("load", placeInitial);
+    window.addEventListener("resize", () => moveUnderlineTo(document.querySelector('.nav-item.text-blue-600')));
+    setTimeout(placeInitial, 50);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(placeInitial);
+
+    const qlPanel   = document.getElementById("quicklinks-panel");
+    const qlTrigger = document.getElementById("quicklinks-trigger");
+    const qlChevron = document.getElementById("ql-chevron");
+
+    function toggleQuicklinks(force) {
+      const open = typeof force === "boolean" ? force : qlPanel.classList.contains("hidden");
+      if (open) {
+        qlPanel.classList.remove("hidden");
+        qlPanel.classList.add("anim-fade-slide");
+        qlChevron.classList.add("rotate-180");
+      } else {
+        qlPanel.classList.add("hidden");
+        qlPanel.classList.remove("anim-fade-slide");
+        qlChevron.classList.remove("rotate-180");
+      }
+    }
+    qlTrigger.addEventListener("click", e => { e.stopPropagation(); toggleQuicklinks(); });
+    document.addEventListener("mousedown", e => {
+      if (!qlPanel.contains(e.target) && !qlTrigger.contains(e.target)) toggleQuicklinks(false);
+    });
+
+    document.getElementById("global-search").addEventListener("keydown", e => {
+      if (e.key === "Enter") { const q = e.target.value.trim(); if (q) console.log("Search company:", q); }
+    });
+    document.addEventListener("keydown", e => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); document.getElementById("global-search").focus(); }
+      if (e.key === "Escape") { toggleQuicklinks(false); toggleDropdown(false); }
+    });
+
+    const dropdownRoot = document.getElementById("dropdown-root");
+    const panel = document.getElementById("dropdown-panel");
+    const avatarBtn = document.getElementById("avatar-btn");
+    const chevron = document.getElementById("chevron");
+
+    function toggleDropdown(force) {
+      const open = typeof force === "boolean" ? force : panel.classList.contains("hidden");
+      if (open) { panel.classList.remove("hidden"); panel.classList.add("anim-fade-slide"); chevron.classList.add("rotate-180"); }
+      else { panel.classList.add("hidden"); panel.classList.remove("anim-fade-slide"); chevron.classList.remove("rotate-180"); }
+    }
+    avatarBtn.addEventListener("click", e => { e.stopPropagation(); toggleDropdown(); });
+    document.addEventListener("mousedown", e => { if (!dropdownRoot.contains(e.target)) toggleDropdown(false); });
+
+    const root = document.documentElement;
+    const themeBtns = document.querySelectorAll(".theme-btn");
+    function getStored(){ return localStorage.getItem("omkara-theme") || "system"; }
+    function setStored(t){ localStorage.setItem("omkara-theme", t); }
+    function applyTheme(theme) {
+      const sysDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      const dark = theme === "dark" || (theme === "system" && sysDark);
+      root.classList.toggle("dark", dark);
+      themeBtns.forEach(b => {
+        const active = b.dataset.theme === theme;
+        b.classList.toggle("bg-blue-50", active && !dark);
+        b.classList.toggle("text-blue-600", active && !dark);
+        b.classList.toggle("dark:bg-blue-500/20", active && dark);
+        b.classList.toggle("dark:text-blue-400", active && dark);
+      });
+    }
+    let currentTheme = getStored();
+    applyTheme(currentTheme);
+    themeBtns.forEach(b => b.addEventListener("click", () => { currentTheme = b.dataset.theme; setStored(currentTheme); applyTheme(currentTheme); }));
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (currentTheme === "system") applyTheme("system"); });
+
+    /* ====================================================================== *
+     * Result Calendar — API integration                                       *
+     * Endpoint: POST https://omkaradata.com/api/ResultCalender_Duplicate      *
+     * Payload : array containing one filter object                            *
+     * ====================================================================== */
+
+    const RC_API_URL = "https://omkaradata.com/api/ResultCalender_Duplicate";
+    const DEFAULT_USER_ID = "2"; // TODO: read from auth/session in production
+
+    // ---------- Date utilities ----------
+    const pad2 = n => String(n).padStart(2, "0");
+    const toMMDDYYYY = d => `${pad2(d.getMonth() + 1)}/${pad2(d.getDate())}/${d.getFullYear()}`;
+    const toYYYYMMDD = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+    const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const DAYS_LONG  = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+    const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+    const DAYS_SS = ["S","M","T","W","T","F","S"];
+    const MONTHS_FULL = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+    function parseAPIDate(s) {
+      const [d, mname, y] = String(s).split("-");
+      return new Date(parseInt(y, 10), MONTHS.indexOf(mname), parseInt(d, 10));
+    }
+
+    // ---------- Company string parser ----------
+    // Server returns "Company Name__ID_#RRGGBB". Color #D2042D = "highlighted".
+    function parseCompany(raw) {
+      const m = String(raw).match(/^(.+?)__(\d+)_(#[0-9A-Fa-f]{6})$/);
+      return m
+        ? { name: m[1], id: m[2], color: m[3] }
+        : { name: String(raw), id: null, color: "#000000" };
+    }
+
+    // ---------- HTML escape ----------
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
+    }
+
+    // ---------- API service ----------
+    async function fetchResultCalendar(filters, signal) {
+      const payload = [{
+        UserId: String(filters.userId || DEFAULT_USER_ID),
+        FromDate: filters.fromDate,          // MM/DD/YYYY
+        ToDate:   filters.toDate,            // MM/DD/YYYY
+        Sector:    Array.isArray(filters.sector)    ? filters.sector    : [],
+        Industry:  Array.isArray(filters.industry)  ? filters.industry  : [],
+        Market_Cap:Array.isArray(filters.marketCap) ? filters.marketCap : ["", ""],
+        Portfolio: !!filters.portfolio,
+        WatchListID: filters.watchlistId || ""
+      }];
+
+      let res;
+      try {
+        res = await fetch(RC_API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          signal
+        });
+      } catch (e) {
+        if (e.name === "AbortError") throw e;
+        throw new Error(
+          "Network error: could not reach the API. This is often CORS — " +
+          "route the call through your backend (Express or FastAPI) instead."
+        );
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+
+      const json = await res.json();
+      const data = Array.isArray(json) ? json[0] : json;
+      if (!data) throw new Error("Empty response from API");
+      if (data.status !== undefined && data.status !== 1) {
+        throw new Error(data.msg || "API returned non-success status");
+      }
+
+      return {
+        headers: (data.Headers || []).map(h => h.HeaderName),
+        rows: (data.Data || []).map(d => ({
+          header: d.Header,
+          companies: (d.Company || []).map(parseCompany)
+        }))
+      };
+    }
+
+    // ---------- Embedded sample data (for "Sample data" toggle) ----------
+    // Sourced from the spec — useful when the live API is CORS-blocked.
+    const RC_SAMPLE = {
+      headers: ["14-May-2026","15-May-2026","16-May-2026","17-May-2026","18-May-2026","19-May-2026","20-May-2026","21-May-2026"],
+      rows: [
+        { header: "14-May-2026", companies: ["JSW Steel Ltd.","Hindustan Aeronautics Ltd.","Muthoot Finance Ltd.","Indian Railway Finance Corporation Ltd.","Tata Motors Passenger Vehicles Ltd.|red","Siemens Energy India Ltd.","United Spirits Ltd.|red","Vishal Mega Mart Ltd.","Housing & Urban Development Corporation Ltd.","Voltas Ltd.","Endurance Technologies Ltd.","Global Health Ltd.","Apollo Tyres Ltd.","Data Patterns (India) Ltd.","Kirloskar Oil Engines Ltd.","Sai Life Sciences Ltd.","The Great Eastern Shipping Company Ltd.","Gujarat Mineral Development Corporation Ltd.","Kalpataru Projects International Ltd.","Carborundum Universal Ltd.","TD Power Systems Ltd.","Chambal Fertilisers and Chemicals Ltd."] },
+        { header: "15-May-2026", companies: ["Power Grid Corporation Of India Ltd.","Tata Steel Ltd.","Solar Industries India Ltd.","Steel Authority Of India Ltd.","NHPC Ltd.","Hindustan Copper Ltd.","Premier Energies Ltd.","Cochin Shipyard Ltd.","Godfrey Phillips India Ltd.","Godrej Industries Ltd.","ITC Hotels Ltd.","Krishna Institute of Medical Sciences Ltd","Gland Pharma Ltd.","SJVN Ltd.","Amber Enterprises India Ltd.","Deepak Nitrite Ltd.","Ratnamani Metals & Tubes Ltd.","Nava Ltd.","Cupid Ltd.","Aether Industries Ltd.","Alembic Pharmaceuticals Ltd.","Devyani International Ltd."] },
+        { header: "16-May-2026", companies: ["Vodafone Idea Ltd.","UNO Minda Ltd.","Delhivery Ltd.","KEC International Ltd.","Genus Power Infrastructures Ltd.","Dodla Dairy Ltd","Latent View Analytics Ltd.","CIAN Agro Industries & Infrastructure Ltd.","Neogen Chemicals Ltd.","Oswal Pumps Ltd.","Rolex Rings Ltd|red","Styrenix Performance Materials Ltd.|red","Hind Rectifiers Ltd.","Tatva Chintan Pharma Chem Ltd.","Maithan Alloys Ltd.","Mangalam Cement Ltd.","Sportking India Ltd.","Bharat Wire Ropes Ltd.","Grand Oak Canyons Distillery Ltd.","Atul Auto Ltd.","Solex Energy Ltd.","Laxmi Goldorna House Ltd."] },
+        { header: "17-May-2026", companies: ["Ashika Credit Capital Ltd.","Meyer Apparel Ltd."] },
+        { header: "18-May-2026", companies: ["Indian Oil Corporation Ltd.","GE Vernova T&D India Ltd.","Astral Ltd.","Timken India Ltd.","Indraprastha Gas Ltd.","Jain Resource Recycling Ltd.","Triveni Turbine Ltd.","JSW Cement Ltd.","Zydus Wellness Ltd.","DOMS Industries Ltd.","Afcons Infrastructure Ltd.","Apollo Micro Systems Ltd.","Strides Pharma Science Ltd.","Sedemac Mechatronics Ltd.","Gujarat Narmada Valley Fertilizers & Chemicals Ltd","JK Paper Ltd.","Aarti Pharmalabs Ltd.","Ajax Engineering Ltd.","Sun Pharma Advanced Research Company Ltd.","Electrosteel Castings Ltd.","Puravankara Ltd.","Subros Ltd."] },
+        { header: "19-May-2026", companies: ["Bharat Electronics Ltd.","Bharat Petroleum Corporation Ltd.","Mankind Pharma Ltd.","Zydus Lifesciences Ltd.","PI Industries Ltd.","Anthem Biosciences Ltd.","Hatsun Agro Product Ltd.","Godawari Power And Ispat Ltd.","BASF India Ltd.","PG Electroplast Ltd.","Fine Organic Industries Ltd.","Trident Ltd.","Rites Ltd.","Eureka Forbes Ltd.|red","Viyash Scientific Ltd.","BlackBuck Ltd.","The Karnataka Bank Ltd.","Healthcare Global Enterprises Ltd.","Orkla India Ltd.","ASK Automotive Ltd.","Zee Entertainment Enterprises Ltd.","Dynamatic Technologies Ltd."] },
+        { header: "20-May-2026", companies: ["Grasim Industries Ltd.","Samvardhana Motherson International Ltd.","Apollo Hospitals Enterprise Ltd.","Bosch Ltd.","Lenskart Solutions Ltd.","Jubilant FoodWorks Ltd.","Metro Brands Ltd.","Honeywell Automation India Ltd.","LMW Ltd.","Medplus Health Services Ltd.","Action Construction Equipment Ltd.","Amagi Media Labs Ltd.","JK Lakshmi Cement Ltd.","Garware Technical Fibres Ltd.","Saatvik Green Energy Ltd.","AGI Infra Ltd.","Hemisphere Properties India Ltd.","IOL Chemicals And Pharmaceuticals Ltd.","Uflex Ltd.","Arvind Smartspaces Ltd.","Xpro India Ltd.|red","Veedol Corporation Ltd."] },
+        { header: "21-May-2026", companies: ["Life Insurance Corporation of India","ITC Ltd.","GAIL (India) Ltd.","LG Electronics India Ltd.","Aurobindo Pharma Ltd.","FSN E-Commerce Ventures Ltd.","Rail Vikas Nigam Ltd.","Prestige Estates Projects Ltd.|red","Page Industries Ltd.","Emami Ltd.","Bikaji Foods International Ltd.","Engineers India Ltd.","Happy Forgings Ltd.|red","Honasa Consumer Ltd.","VA Tech Wabag Ltd.","Le Travenues Technology Ltd.","Wework India Management Ltd.","ICRA Ltd.","Datamatics Global Services Ltd.","Laxmi Organic Industries Ltd.","Lux Industries Ltd.","GMM Pfaudler Ltd."] }
+      ]
+    };
+    // Inflate sample rows to the parsed-company shape
+    RC_SAMPLE.rows = RC_SAMPLE.rows.map(r => ({
+      header: r.header,
+      companies: r.companies.map(s => {
+        const red = s.endsWith("|red");
+        const name = red ? s.slice(0, -4) : s;
+        return { name, id: null, color: red ? "#D2042D" : "#000000" };
+      })
+    }));
+
+    // ---------- Mini router ----------
+    const viewHome = document.getElementById("view-home");
+    const viewCalendar = document.getElementById("view-result-calendar");
+
+    function navigateTo(route) {
+      const target = route === "result-calendar" ? viewCalendar : viewHome;
+      const other  = route === "result-calendar" ? viewHome     : viewCalendar;
+      other.classList.add("hidden");
+      target.classList.remove("hidden");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      toggleQuicklinks(false);
+      if (route === "result-calendar" && !viewCalendar.dataset.initialized) {
+        initResultCalendar();
+        viewCalendar.dataset.initialized = "1";
+      }
+    }
+
+    document.addEventListener("click", e => {
+      const link = e.target.closest("[data-route]");
+      if (!link) return;
+      e.preventDefault();
+      navigateTo(link.dataset.route);
+    });
+
+    // ---------- Result Calendar controller ----------
+    let rcController = null;
+    let rcLastFetchAt = 0;
+    const RC_DEBOUNCE_MS = 300;
+
+    // Filter state held in JS (not in form controls) for the custom widgets
+    const rcState = {
+      start: null,           // Date — range start
+      end:   null,           // Date — range end
+      mcapMin: 0,
+      mcapMax: 0,            // 0 means "no upper bound"
+      mcapActive: false,     // true once user picks a value
+      search: ""
+    };
+
+    function initResultCalendar() {
+      // Default range: today → today + 7 days (8 columns)
+      const today = new Date(); today.setHours(0,0,0,0);
+      const plus7 = new Date(today); plus7.setDate(today.getDate() + 7);
+      rcState.start = today;
+      rcState.end   = plus7;
+
+      // --- Wire toggles & checkboxes (auto-apply on change) ---
+      // Portfolio is now a client-side filter (red-highlighted companies only) — no refetch
+      document.getElementById("rc-portfolio").addEventListener("change", rerenderFiltered);
+      document.getElementById("rc-demo").addEventListener("change", queueLoad);
+
+      // --- Wire search (debounced on input) ---
+      let searchTimer = null;
+      document.getElementById("rc-search").addEventListener("input", e => {
+        rcState.search = e.target.value.trim().toLowerCase();
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(rerenderFiltered, 200);
+      });
+
+      // --- Wire custom widgets ---
+      initDurationPicker();
+      initMarketCapPicker();
+
+      // Initial render
+      updateDurationLabel();
+      loadCalendar();
+    }
+
+    // --------- DURATION (date range) picker ---------
+    const dpState = { viewMonth: new Date(), pendingStart: null };
+
+    function initDurationPicker() {
+      const btn = document.getElementById("rc-duration-btn");
+      const panel = document.getElementById("rc-duration-panel");
+      const root = document.getElementById("rc-duration-root");
+
+      btn.addEventListener("click", e => {
+        e.stopPropagation();
+        const isHidden = panel.classList.contains("hidden");
+        // Position view at the start date when opening
+        if (isHidden) { dpState.viewMonth = new Date(rcState.start || new Date()); dpState.viewMonth.setDate(1); dpState.pendingStart = null; renderDurationPanel(); }
+        panel.classList.toggle("hidden");
+      });
+
+      document.addEventListener("mousedown", e => {
+        if (!root.contains(e.target)) panel.classList.add("hidden");
+      });
+    }
+
+    function updateDurationLabel() {
+      const fmt = d => `${d.getDate()} ${MONTHS[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`;
+      document.getElementById("rc-duration-label").textContent =
+        rcState.start && rcState.end ? `${fmt(rcState.start)} – ${fmt(rcState.end)}` : "—";
+    }
+
+    function sameDay(a, b) { return a && b && a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); }
+
+    function renderDurationPanel() {
+      const panel = document.getElementById("rc-duration-panel");
+      const month = dpState.viewMonth.getMonth();
+      const year  = dpState.viewMonth.getFullYear();
+      const firstDow = new Date(year, month, 1).getDay();
+      const daysInMonth = new Date(year, month+1, 0).getDate();
+
+      // The "current" label shows the start of the selected range
+      const anchor = rcState.start || new Date();
+      const head = `${DAYS[anchor.getDay()].toUpperCase()} ${MONTHS[anchor.getMonth()].toUpperCase()} ${anchor.getDate()} ${anchor.getFullYear()}`;
+
+      const cells = [];
+      for (let i=0; i<firstDow; i++) cells.push('<div class="dp-cell empty"></div>');
+      for (let d=1; d<=daysInMonth; d++) {
+        const date = new Date(year, month, d);
+        const start = rcState.start, end = rcState.end;
+        const inRange = start && end && date > start && date < end;
+        const isStart = sameDay(date, start);
+        const isEnd   = sameDay(date, end);
+        let cls = "dp-cell";
+        if (isStart || isEnd) cls += " endpoint";
+        else if (inRange) cls += " in-range";
+        if (isStart && end && !sameDay(start, end)) cls += " range-start";
+        if (isEnd   && start && !sameDay(start, end)) cls += " range-end";
+        cells.push(`<button class="${cls}" data-d="${d}">${d}</button>`);
+      }
+
+      panel.innerHTML = `
+        <div class="dp-head">
+          <div class="dp-current">${head}
+            <svg class="inline h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </div>
+          <div class="dp-nav">
+            <button id="dp-prev" type="button"><svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+            <button id="dp-next" type="button"><svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+          </div>
+        </div>
+        <div class="dp-dow">${DAYS_SS.map(s => `<div>${s}</div>`).join("")}</div>
+        <div class="dp-month-name">${MONTHS_FULL[month].toUpperCase()}</div>
+        <div class="dp-grid">${cells.join("")}</div>
+      `;
+
+      panel.querySelector("#dp-prev").addEventListener("click", e => { e.stopPropagation(); dpState.viewMonth = new Date(year, month-1, 1); renderDurationPanel(); });
+      panel.querySelector("#dp-next").addEventListener("click", e => { e.stopPropagation(); dpState.viewMonth = new Date(year, month+1, 1); renderDurationPanel(); });
+
+      panel.querySelectorAll(".dp-cell[data-d]").forEach(b => {
+        b.addEventListener("click", e => {
+          e.stopPropagation();
+          const d = parseInt(b.dataset.d, 10);
+          const picked = new Date(year, month, d);
+          if (!dpState.pendingStart) {
+            dpState.pendingStart = picked;
+            rcState.start = picked; rcState.end = picked;
+            renderDurationPanel();
+          } else {
+            const a = dpState.pendingStart, bDate = picked;
+            rcState.start = a < bDate ? a : bDate;
+            rcState.end   = a < bDate ? bDate : a;
+            dpState.pendingStart = null;
+            updateDurationLabel();
+            document.getElementById("rc-duration-panel").classList.add("hidden");
+            queueLoad();
+          }
+        });
+      });
+    }
+
+    // --------- MARKET CAP picker ---------
+    function initMarketCapPicker() {
+      const btn = document.getElementById("rc-mcap-btn");
+      const panel = document.getElementById("rc-mcap-panel");
+      const root = document.getElementById("rc-mcap-root");
+      const sliderMin = document.getElementById("rc-mcap-slider-min");
+      const sliderMax = document.getElementById("rc-mcap-slider-max");
+      const inputMin = document.getElementById("rc-mcap-min");
+      const inputMax = document.getElementById("rc-mcap-max");
+      const fill = document.getElementById("rc-mcap-fill");
+      const label = document.getElementById("rc-mcap-label");
+      const clear = document.getElementById("rc-mcap-clear");
+      const cmp = document.getElementById("rc-mcap-cmp");
+      const MAX = parseInt(sliderMax.max, 10);
+      const DEFAULT_MIN = 500;
+
+      function fmt(n) { return Number(n).toLocaleString("en-IN"); }
+      function syncFill() {
+        const lo = Math.min(+sliderMin.value, +sliderMax.value);
+        const hi = Math.max(+sliderMin.value, +sliderMax.value);
+        fill.style.left  = (lo / MAX * 100) + "%";
+        fill.style.right = (100 - hi / MAX * 100) + "%";
+      }
+      function syncLabel(lo, hi) {
+        // Switch to ≤ {max} when there's no meaningful lower bound (min < 1)
+        if (lo < 1) {
+          cmp.textContent = "≤";
+          label.textContent = fmt(hi);
+        } else {
+          cmp.textContent = "≥";
+          label.textContent = fmt(lo);
+        }
+      }
+      function syncFromSliders() {
+        const lo = Math.min(+sliderMin.value, +sliderMax.value);
+        const hi = Math.max(+sliderMin.value, +sliderMax.value);
+        inputMin.value = lo; inputMax.value = hi;
+        rcState.mcapMin = lo; rcState.mcapMax = hi;
+        // Default = (500, MAX); any deviation is "active"
+        rcState.mcapActive = !(lo === DEFAULT_MIN && hi === MAX);
+        syncLabel(lo, hi);
+        clear.classList.toggle("hidden", !rcState.mcapActive);
+        btn.classList.toggle("active", rcState.mcapActive);
+        syncFill();
+      }
+      function syncFromInputs() {
+        const lo = Math.min(+inputMin.value || 0, MAX);
+        const hi = Math.min(+inputMax.value || 0, MAX);
+        sliderMin.value = lo; sliderMax.value = Math.max(hi, lo);
+        syncFromSliders();
+      }
+
+      btn.addEventListener("click", e => {
+        // Don't open if clicking the × inside the button
+        if (e.target.closest("#rc-mcap-clear")) return;
+        e.stopPropagation();
+        panel.classList.toggle("hidden");
+      });
+      document.addEventListener("mousedown", e => { if (!root.contains(e.target)) panel.classList.add("hidden"); });
+
+      sliderMin.addEventListener("input", () => { syncFromSliders(); queueLoad(); });
+      sliderMax.addEventListener("input", () => { syncFromSliders(); queueLoad(); });
+      inputMin.addEventListener("input", () => { syncFromInputs(); queueLoad(); });
+      inputMax.addEventListener("input", () => { syncFromInputs(); queueLoad(); });
+
+      clear.addEventListener("click", e => {
+        e.stopPropagation();
+        sliderMin.value = DEFAULT_MIN; sliderMax.value = MAX;
+        inputMin.value  = DEFAULT_MIN; inputMax.value  = MAX;
+        rcState.mcapMin = DEFAULT_MIN; rcState.mcapMax = MAX; rcState.mcapActive = false;
+        syncLabel(DEFAULT_MIN, MAX);
+        clear.classList.add("hidden");
+        btn.classList.remove("active");
+        syncFill();
+        queueLoad();
+      });
+
+      // Initial visual state: defaults (min=500, max=MAX), neutral / no clear button
+      sliderMin.value = DEFAULT_MIN; sliderMax.value = MAX;
+      rcState.mcapMin = DEFAULT_MIN; rcState.mcapMax = MAX;
+      syncLabel(DEFAULT_MIN, MAX);
+      syncFill();
+    }
+
+    // --------- Filters → API call ---------
+    function readFilters() {
+      return {
+        userId: DEFAULT_USER_ID,
+        fromDate: toMMDDYYYY(rcState.start),
+        toDate:   toMMDDYYYY(rcState.end),
+        sector: [], industry: [],
+        marketCap: rcState.mcapActive
+          ? [String(rcState.mcapMin), String(rcState.mcapMax)]
+          : ["", ""],
+        portfolio:   false,    // Portfolio is now a client-side red-only filter
+        watchlistId: ""
+      };
+    }
+
+    let _queueTimer = null;
+    function queueLoad() {
+      clearTimeout(_queueTimer);
+      _queueTimer = setTimeout(loadCalendar, 250);
+    }
+
+    // Stash the latest unfiltered result so the search box can re-filter without refetching
+    let _lastResult = null;
+
+    async function loadCalendar() {
+      const now = Date.now();
+      if (now - rcLastFetchAt < RC_DEBOUNCE_MS) return;
+      rcLastFetchAt = now;
+      if (rcController) rcController.abort();
+      rcController = new AbortController();
+
+      renderRcLoading();
+      const filters = readFilters();
+      const useSample = document.getElementById("rc-demo").checked;
+
+      try {
+        const result = useSample
+          ? await new Promise(r => setTimeout(() => r(RC_SAMPLE), 350))
+          : await fetchResultCalendar(filters, rcController.signal);
+        _lastResult = result;
+        rerenderFiltered();
+      } catch (e) {
+        if (e.name === "AbortError") return;
+        renderRcError(e.message);
+      }
+    }
+
+    function rerenderFiltered() {
+      if (!_lastResult) return;
+      const q = rcState.search;
+      const portfolioOnly = document.getElementById("rc-portfolio").checked;
+
+      if (!q && !portfolioOnly) {
+        renderRcResults(_lastResult);
+        return;
+      }
+      const filtered = {
+        headers: _lastResult.headers,
+        rows: _lastResult.rows.map(r => ({
+          header: r.header,
+          companies: r.companies.filter(c => {
+            if (q && !c.name.toLowerCase().includes(q)) return false;
+            if (portfolioOnly && String(c.color).toUpperCase() !== "#D2042D") return false;
+            return true;
+          })
+        }))
+      };
+      renderRcResults(filtered);
+    }
+
+    function renderRcLoading() {
+      const grid = document.getElementById("rc-grid");
+      // 8 placeholder columns
+      const n = 8;
+      const cols = Array.from({ length: n }, () => `
+        <div class="cal-col">
+          <div class="cal-header"><span class="skeleton" style="width: 70%"></span></div>
+          <div class="cal-body">
+            ${Array.from({ length: 14 }).map(() =>
+              `<div class="cal-company"><span class="skeleton" style="width: ${50 + Math.random()*35}%"></span></div>`
+            ).join("")}
+          </div>
+        </div>`).join("");
+      grid.innerHTML = `<div class="cal-grid" style="grid-template-columns: repeat(${n}, minmax(0, 1fr)); height: calc(100vh - 220px);">${cols}</div>`;
+      document.getElementById("rc-status").textContent = "Loading...";
+    }
+
+    function renderRcError(msg) {
+      const grid = document.getElementById("rc-grid");
+      grid.innerHTML = `
+        <div class="rounded-xl border border-rose-200 bg-rose-50 p-8 text-center dark:border-rose-900/50 dark:bg-rose-950/30">
+          <p class="font-semibold text-rose-700 dark:text-rose-300">Something went wrong</p>
+          <p class="mt-2 text-sm text-rose-600 dark:text-rose-400">${escapeHtml(msg)}</p>
+          <div class="mt-4 flex items-center justify-center gap-2">
+            <button id="rc-retry" class="rounded-md bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700">Retry</button>
+            <button id="rc-use-sample" class="rounded-md border border-rose-300 bg-white px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50 dark:border-rose-800 dark:bg-slate-900 dark:text-rose-300">Use sample data</button>
+          </div>
+        </div>`;
+      document.getElementById("rc-retry").addEventListener("click", loadCalendar);
+      document.getElementById("rc-use-sample").addEventListener("click", () => {
+        document.getElementById("rc-demo").checked = true;
+        loadCalendar();
+      });
+      document.getElementById("rc-status").textContent = "Error";
+    }
+
+    function renderRcResults(result) {
+      const grid = document.getElementById("rc-grid");
+      const status = document.getElementById("rc-status");
+
+      const allEmpty = !result.rows.length || result.rows.every(r => !r.companies.length);
+      if (allEmpty) {
+        grid.innerHTML = `
+          <div class="rounded-xl border border-slate-200 bg-white p-12 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <p class="font-semibold text-slate-700 dark:text-slate-200">${rcState.search ? "No matches for \"" + escapeHtml(rcState.search) + "\"" : "No results for these filters"}</p>
+            <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">${rcState.search ? "Try a different company name." : "Try widening the date range or clearing filters."}</p>
+          </div>`;
+        status.textContent = "0 days · 0 companies";
+        return;
+      }
+
+      const n = result.rows.length || 1;
+      let total = 0;
+      const cols = result.rows.map(row => {
+        total += row.companies.length;
+        const d = parseAPIDate(row.header);
+        const dow = isNaN(d.getTime()) ? "" : DAYS[d.getDay()];
+        const body = row.companies.map(c => {
+          const red = String(c.color).toUpperCase() === "#D2042D";
+          const cls = red ? "cal-company cal-company-red" : "cal-company";
+          return `<div class="${cls}" title="${escapeHtml(c.name)}"${c.id ? ` data-id="${escapeHtml(c.id)}"` : ""}>${escapeHtml(c.name)}</div>`;
+        }).join("");
+        return `
+          <div class="cal-col">
+            <div class="cal-header">
+              <span class="cal-date">${escapeHtml(row.header)}${dow ? ` <span class="cal-dow">(${dow})</span>` : ""}</span>
+              <span class="cal-count">${row.companies.length}</span>
+            </div>
+            <div class="cal-body">${body || '<div class="cal-company" style="color:#94a3b8;font-style:italic;">—</div>'}</div>
+          </div>`;
+      }).join("");
+
+      grid.innerHTML = `<div class="cal-grid" style="grid-template-columns: repeat(${n}, minmax(0, 1fr)); height: calc(100vh - 220px);">${cols}</div>`;
+      status.textContent = `${result.rows.length} days · ${total} companies`;
+    }
+  </script>
+</body>
+</html>
