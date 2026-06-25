@@ -38,11 +38,124 @@
   .num { font-variant-numeric: tabular-nums; }
   a { color: inherit; }
 
-  .app { display: grid; grid-template-columns: 200px 1fr; min-height: 100vh; }
+  .app { display: grid; grid-template-columns: 201px 1fr; min-height: 100vh; }
+
+  /* Forensic landing (empty state) — shown until a company is selected. */
+  .forensic-empty { max-width: 520px; margin: 12vh auto 0; text-align: center; padding: 0 20px; display: flex; flex-direction: column; align-items: center; }
+  .forensic-empty-icon { width: 64px; height: 64px; border-radius: 16px; background: var(--bg-card); border: 1px solid var(--line); display: grid; place-items: center; color: var(--muted); margin-bottom: 18px; }
+  .forensic-empty-icon svg { width: 30px; height: 30px; }
+  .forensic-empty-title { font-size: 26px; font-weight: 700; color: var(--ink); margin: 0 0 8px; letter-spacing: -0.01em; }
+  .forensic-empty-sub { font-size: 13.5px; color: var(--muted); line-height: 1.55; margin: 0 0 22px; max-width: 380px; }
+  .forensic-empty-cta { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg-card); color: var(--ink); font-family: var(--font); font-size: 13px; font-weight: 600; cursor: pointer; transition: background .12s, border-color .12s; }
+  .forensic-empty-cta:hover { background: rgba(0,0,0,0.03); border-color: var(--accent); }
+  .forensic-empty-cta svg { width: 15px; height: 15px; color: var(--muted); }
+
+  /* Forensic page = header-only Company view: keep the .co-header card,
+     hide the tab bar, every pane, and the description line. */
+  #companyView.cv-header-only .cv-tabs,
+  #companyView.cv-header-only .cv-pane,
+  #companyView.cv-header-only .co-desc { display: none; }
+
+  /* Exchange chips that carry a deep-link (Forensic card) become clickable.
+     Keeps the existing chip colour; just adds the affordance. */
+  .chip.chip-link { cursor: pointer; transition: filter .12s; }
+  .chip.chip-link:hover { filter: brightness(0.95); text-decoration: underline; }
+  .chip.chip-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* ===== Forensic page → Single Page tab ===== */
+  #forensicPage { margin-top: 20px; }
+  .fp-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .fp-tab { appearance: none; background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 10px 14px; font-family: var(--font); font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; white-space: nowrap; transition: color .12s, border-color .12s; }
+  .fp-tab:hover:not(:disabled) { color: var(--ink); }
+  .fp-tab.active { color: var(--ink); border-bottom-color: var(--accent); }
+  .fp-tab:disabled { color: var(--muted-2); cursor: not-allowed; opacity: .55; }
+
+  .fp-singlepage { padding-top: 16px; }
+  /* Consolidated / Standalone — white active pill on a light track. */
+  .fp-modes { display: inline-flex; gap: 3px; padding: 3px; background: #EEF1F4; border: 1px solid #E3E7EB; border-radius: var(--radius); margin-bottom: 4px; }
+  .fp-mode { appearance: none; border: none; background: none; padding: 6px 18px; font-family: var(--font); font-size: 12.5px; font-weight: 600; color: var(--muted); border-radius: calc(var(--radius) - 3px); cursor: pointer; transition: background .14s, color .14s, box-shadow .14s; }
+  .fp-mode:hover:not(:disabled):not(.active) { color: var(--ink); }
+  .fp-mode.active { background: var(--bg-card); color: var(--ink); box-shadow: 0 1px 2px rgba(16,24,40,0.12), 0 0 0 0.5px rgba(16,24,40,0.04); }
+  .fp-mode:disabled { color: var(--muted-2); cursor: not-allowed; opacity: .55; }
+
+  /* Sticky jump-chips bar — sits below the Snapshot, pins under the topbar. */
+  .fp-chips { position: sticky; top: 60px; z-index: 12; display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 0; margin: 18px 0 6px; background: var(--bg-canvas); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .fp-chip { appearance: none; border: 1px solid var(--line); background: var(--bg-card); padding: 5px 12px; border-radius: 999px; font-family: var(--font); font-size: 12px; font-weight: 500; color: var(--ink-2); cursor: pointer; white-space: nowrap; transition: background .12s, border-color .12s, color .12s; }
+  .fp-chip:hover { background: rgba(232,116,59,0.08); border-color: var(--accent); color: var(--accent); }
+
+  /* Each table sits in its own clean white card. */
+  #forensicPage .fp-tables.cv-forensic { padding: 0; }
+  #forensicPage .fp-section { margin: 0 0 16px; scroll-margin-top: 124px; background: var(--bg-card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 16px 18px; box-shadow: 0 1px 2px rgba(16,24,40,0.04); }
+  #forensicPage .fp-sec-title { font-size: 14px; font-weight: 700; color: var(--ink); margin: 0 0 14px; padding: 0; border: none; letter-spacing: -0.01em; }
+  /* Card-grid tables (Snapshot / Averages): the metric-group cards ARE the
+     presentation — drop the renderer's outer padding and make the grid
+     responsive so groups wrap cleanly. */
+  #forensicPage .fp-section .fr-cards { padding: 0; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+  #forensicPage .fp-section .fr-avg-grid { padding: 0; }
+  /* Time-series tables here are short and stacked on one page. The shared
+     sticky-header offsets (built for a single visible pane) misfire in this
+     context — on single-row headers they leave a 30px blank strip and hide the
+     first data row. So headers are forced static and tables fit the card width
+     (no horizontal scrollbar). These use !important to win over the deeply
+     specific shared .cv-forensic rules regardless of source order. */
+  #forensicPage table.fr-table.fr-table-transposed { min-width: 0 !important; }
+  #forensicPage table.fr-table thead th,
+  #forensicPage table.fr-table.fr-table-transposed thead th,
+  #forensicPage table.fr-table.fr-table-transposed thead tr:not(.fr-thead-super) th,
+  #forensicPage table.fr-table.fr-table-transposed thead .fr-thead-super th,
+  #forensicPage table.fr-table.fr-table-transposed thead th.fr-th-period[rowspan] {
+    position: static !important; top: auto !important;
+  }
+
+  /* Summary sub-column headers (3yrs / 5yrs / 10yrs) shown lowercase, not
+     uppercased like the rest of the dark header row. !important so it wins
+     over the later, equally-specific shared uppercase rule. */
+  #forensicPage table.fr-table thead th.fr-cagr-col { text-transform: none !important; }
+
+  /* Fund Flow / Expense Analysis / Asset efficiency: the summary columns are
+     NOT a green flood — only API-flagged cells carry colour. Negatives without
+     an API flag show red text (no fill); API-flagged condition cells keep their
+     green/red (the .fr-pos/.fr-neg rules below win by coming later). */
+  #forensicPage table.fr-cagr-conditional tbody td.fr-cagr-col {
+    background: transparent !important; color: var(--ink-2) !important;
+  }
+  #forensicPage table.fr-cagr-conditional tbody td.fr-cagr-col.fr-neg-num {
+    color: var(--negative) !important;
+  }
+  #forensicPage table.fr-cagr-conditional tbody td.fr-cagr-col.fr-pos {
+    background: var(--positive-soft) !important; color: var(--positive) !important;
+  }
+  #forensicPage table.fr-cagr-conditional tbody td.fr-cagr-col.fr-neg {
+    background: var(--negative-soft) !important; color: var(--negative) !important;
+  }
+
+  /* Info tooltips pop ABOVE the icon on the Single Page so they never overflow
+     the card's bottom edge (which previously forced a scrollbar). */
+  #forensicPage .fr-info::after {
+    top: auto !important; bottom: calc(100% + 8px) !important; transform: translateY(4px);
+  }
+  #forensicPage .fr-info:hover::after { transform: translateY(0); }
+
+  /* ShareHolding Pattern — Quarterly / Yearly toggle on the heading line
+     (right-aligned), white-pill style matching the Consolidated / Standalone
+     control. */
+  #forensicPage .fp-sec-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+  #forensicPage .fp-sec-head .fp-sec-title { margin: 0; }
+  .fp-shtoggle { display: inline-flex; gap: 3px; padding: 3px; background: #EEF1F4; border: 1px solid #E3E7EB; border-radius: var(--radius); margin: 0; flex: none; }
+  .fp-shbtn { appearance: none; border: none; background: none; padding: 5px 14px; font-family: var(--font); font-size: 12px; font-weight: 600; color: var(--muted); border-radius: calc(var(--radius) - 3px); cursor: pointer; transition: background .14s, color .14s, box-shadow .14s; }
+  .fp-shbtn:hover:not(.active) { color: var(--ink); }
+  .fp-shbtn.active { background: var(--bg-card); color: var(--ink); box-shadow: 0 1px 2px rgba(16,24,40,0.12); }
+
+  .fp-retry { margin-top: 10px; appearance: none; border: 1px solid var(--line); background: var(--bg-card); padding: 7px 16px; border-radius: var(--radius); font-family: var(--font); font-size: 12.5px; font-weight: 600; color: var(--ink); cursor: pointer; }
+  .fp-retry:hover { border-color: var(--accent); color: var(--accent); }
+  /* Latest shareholding period appended to the card heading, in grey. */
+  .fr-card-title h4 .fr-sh-period { color: var(--muted); font-weight: 500; font-size: 0.86em; margin-left: 4px; }
 
   /* Sidebar (shared shell) */
   .sidebar { background: var(--bg-sidebar); border-right: 1px solid var(--line); padding: 12px 14px 16px; position: sticky; top: 0; height: 100vh; overflow-y: auto; display: flex; flex-direction: column; }
-  .brand { display: flex; align-items: center; gap: 10px; padding: 4px 10px 11px; border-bottom: 1px solid var(--line); margin-bottom: 18px; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 4px 10px 11px; border-bottom: 1px solid var(--line); margin-bottom: 18px; cursor: pointer; border-radius: var(--radius-sm); transition: background .12s; }
+  .brand:hover { background: rgba(0,0,0,0.03); }
+  .brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .brand-mark { width: 36px; height: 36px; background: var(--bg-card); border: 1px solid var(--line); border-radius: 6px; display: grid; place-items: center; flex-shrink: 0; padding: 3px; }
   .brand-mark img { width: 100%; height: 100%; object-fit: contain; display: block; }
   .brand-text { line-height: 1.15; }
@@ -1006,6 +1119,10 @@
   #companyView .co-meta .dot { width: 3px; height: 3px; background: var(--muted-2); border-radius: 50%; flex-shrink: 0; }
   #companyView .co-meta a { color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
   #companyView .co-meta a:hover { color: var(--accent); }
+  /* Company website link (Forensic card) — sits first in the meta line. */
+  #companyView .co-meta a.co-web { cursor: pointer; }
+  #companyView .co-meta a.co-web svg { width: 13px; height: 13px; flex-shrink: 0; }
+  #companyView .co-meta a.co-web:hover { text-decoration: underline; }
   #companyView .co-desc { font-size: 12.5px; color: var(--ink-2); line-height: 1.5; margin: 6px 0 0; max-width: 760px; }
 
   #companyView .co-price {

@@ -55,6 +55,10 @@ const BROKER_URL  = '/api/brokermaster';
 // Working capital analysis, Asset efficiency, Capital structure,
 // Expense Analysis, Du Pont Analysis, ShareHolding Pattern).
 const FORENSIC_URL = '/api/Forensic_DetailedTables';
+// Company Note — the Forensic page header card is enriched from this.
+// POST + JSON body { CompanyID }. Response Data[0] carries the canonical
+// CompanyName, NSEcode/BSEcode and the exchange deep-links (NSELink/BSELink).
+const COMPANYNOTE_URL = '/api/companynote';
 // Watchlist persistence — server-backed CRUD for named watchlists.
 // POST + JSON body { ID, UserID, WatchListNAme, status, input }. When
 // ID is empty the server creates a new watchlist and returns it in the
@@ -158,6 +162,8 @@ const DATA = {
 
 /* ============================ STATE ============================ */
 const state = {
+  view: 'daily',                    // active top-level view: daily | settings | company | forensic
+  forensicMode: false,              // armed by the Forensic nav: next company pick opens its Forensic tab
   selected: new Set(['default']),   // multi-select set of watchlist ids
   tab: 'announcements',
   ann: {                            // Corp Announcement (live API) state
@@ -4136,6 +4142,11 @@ function selectCompany(company) {
   // Open the in-app Company view rather than navigating to a separate URL.
   // The sidebar + topbar stay mounted; only the main content area swaps.
   state.company.data = company;
+  // The Forensic page is header-only: just the company name section (header
+  // card incl. live-price panel), no tab bar, no panes, and no
+  // Forensic_DetailedTables call. The normal top-search company page is
+  // untouched (full tabs + forensic). headerOnly mirrors the forensic flow.
+  state.company.headerOnly = !!state.forensicMode;
   state.company.tab = 'overview';
   // Hard-reset the forensic sub-state so the new company can't show
   // a previous company's cached data. This used to happen lazily inside
@@ -4156,20 +4167,325 @@ function selectCompany(company) {
     f.error = null;
   }
   showView('company');
-  // Eager fetch — kick off the forensic Consolidated load immediately
-  // on company selection, in parallel with the Overview render. By the
-  // time the user clicks the Forensic tab, the data is in flight or
-  // has landed. Exactly ONE Forensic_DetailedTables request fires on
-  // selection — type:"con". The Standalone fetch fires lazily, only
-  // when the user actually toggles to the Standalone mode. This
-  // single-request-on-selection contract is intentional: a parallel
-  // Standalone prefetch was tried earlier and dropped because it
-  // doubled the request count and slowed the visible Consolidated
-  // load on a single-threaded API.
-  if (resolveCompanyId(company)) {
+  // Header-only (Forensic page): no tabs to activate. Normal flow syncs the
+  // visible tab to state (Overview), which also resets it on company switch.
+  if (!state.company.headerOnly) {
+    activateCompanyTab(state.company.tab);
+  } else {
+    // Forensic page: enrich the header card from companynote (canonical name
+    // + NSE/BSE chips + exchange links). The card already shows search data;
+    // this overrides it when the note lands. One companynote call per select.
+    loadForensicHeaderNote(company);
+    // Forensic page "Single Page" tab — load Consolidated tables by default.
+    startForensicSinglePage();
+  }
+  // Eager Forensic_DetailedTables fetch — NORMAL company page only. The
+  // Forensic page is header-only and must not fire this call.
+  if (!state.company.headerOnly && resolveCompanyId(company)) {
     const startMode = (state.company.forensic && state.company.forensic.mode) || 'con';
     loadForensic(startMode);
   }
+}
+
+// Programmatically activate a Company-view tab (mirrors the click handler in
+// wireCompanyTabs). Used to land on the Forensic tab from the Forensic flow
+// and to reset the visible tab when switching companies.
+function activateCompanyTab(tabId) {
+  const bar = document.getElementById('cvTabs');
+  if (!bar) return;
+  const btn = bar.querySelector('.cv-tab[data-cvtab="' + tabId + '"]');
+  if (!btn) return;
+  bar.querySelectorAll('.cv-tab').forEach(t => t.classList.toggle('active', t === btn));
+  document.querySelectorAll('#companyView .cv-pane').forEach(p => {
+    p.hidden = (p.dataset.pane !== tabId);
+  });
+  state.company.tab = tabId;
+  if (tabId === 'overview') ensureCompanyCharts();
+  if (tabId === 'forensic') renderForensicView();
+}
+
+// ===========================================================================
+// FORENSIC HEADER ENRICHMENT — companynote (Forensic page only)
+// ===========================================================================
+// On the Forensic page the header card is enriched from the companynote API.
+// The card renders instantly from the search result; this fills in the
+// canonical CompanyName and the NSE/BSE chips + exchange deep-links once the
+// note arrives. Sector / Industry / ISIN stay as rendered from the search
+// (SymbolMaster_WithCode). One call per selection, mapped by CompanyID.
+
+// POST { CompanyID } and return Data[0], or null. Failures are swallowed —
+// the search-derived header already shows, so a miss just means no links.
+async function loadCompanyNote(companyId) {
+  if (companyId == null || String(companyId).trim() === '') return null;
+  try {
+    const res = await fetch(COMPANYNOTE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ CompanyID: String(companyId).trim() }),
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const rows = json && Array.isArray(json.Data) ? json.Data : [];
+    return rows[0] || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+// Kick off the note fetch for the just-selected company and apply it when it
+// lands. Guarded by CompanyID so a late response for a previously-selected
+// company is ignored.
+function loadForensicHeaderNote(company) {
+  const cid = (company && company.CompanyID != null && String(company.CompanyID).trim() !== '')
+    ? String(company.CompanyID).trim()
+    : resolveCompanyId(company);
+  state.company.note = { companyId: cid, data: null };
+  if (!cid) return;
+  loadCompanyNote(cid).then(note => {
+    if (!note) return;
+    if (String(state.company.note.companyId) !== String(cid)) return; // stale
+    state.company.note.data = note;
+    applyForensicNote();
+  });
+}
+
+// Override the Forensic header with companynote fields: canonical name and
+// the two exchange chips (with deep-links). Meta line is left as-is.
+function applyForensicNote() {
+  const note = state.company.note && state.company.note.data;
+  if (!note) return;
+  const nameEl = document.getElementById('cvCompanyName');
+  if (nameEl && note.CompanyName) nameEl.textContent = note.CompanyName;
+  setExchangeChip(document.getElementById('cvChipNse'), 'NSE', note.NSEcode, note.NSELink);
+  setExchangeChip(document.getElementById('cvChipBse'), 'BSE', note.BSEcode, note.BSELink);
+  // Rebuild the meta line so the website link (companynote) appears first.
+  renderCompanyMeta();
+}
+
+// Build the header meta line: Website · Sector · Industry · ISIN, all on one
+// line (flex-wrap) with dot separators. The website (companynote, Forensic
+// card only) comes FIRST, before Sector, as a clickable link that opens the
+// company site in a new tab; it's omitted entirely when WebSiteLink is absent.
+// Sector / Industry / ISIN come from the search result. Single source of truth
+// for #cvMeta — called on open and again when the companynote note lands.
+function renderCompanyMeta() {
+  const metaEl = document.getElementById('cvMeta');
+  if (!metaEl) return;
+  const c = state.company.data || {};
+  const note = (state.company.headerOnly && state.company.note && state.company.note.data) || null;
+  const parts = [];
+  const webRaw = note && note.WebSiteLink ? String(note.WebSiteLink).trim() : '';
+  if (webRaw) {
+    const href = /^https?:\/\//i.test(webRaw) ? webRaw : 'https://' + webRaw;
+    const label = webRaw.replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+    parts.push(
+      '<a class="co-web" href="' + escapeHtml(href) + '" target="_blank" rel="noopener noreferrer" title="Open company website">'
+      + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.6 2.7 2.6 15.3 0 18M12 3c-2.6 2.7-2.6 15.3 0 18"/></svg>'
+      + '<span>' + escapeHtml(label) + '</span></a>'
+    );
+  }
+  if (c.Sector)   parts.push('<span>Sector · ' + escapeHtml(c.Sector) + '</span>');
+  if (c.Industry) parts.push('<span>Industry · ' + escapeHtml(c.Industry) + '</span>');
+  if (c.ISIONNo)  parts.push('<span>ISIN · ' + escapeHtml(c.ISIONNo) + '</span>');
+  metaEl.innerHTML = parts.join('<span class="dot"></span>');
+}
+
+// ===========================================================================
+// FORENSIC PAGE — "Single Page" tab (Forensic_DetailedTables)
+// ===========================================================================
+// Renders below the company header card on the Forensic page. A tab bar
+// (Single Page + 6 disabled placeholders) sits on top; the Single Page tab
+// shows a Consolidated/Standalone toggle, the Snapshot table, a sticky bar of
+// jump-chips, then the remaining tables stacked. Reuses the proven table
+// renderers (renderForensicCardGrid / renderForensicTimeSeriesTable). con/std
+// are cached per mode so toggling is instant after the first fetch.
+
+const FP_TABS = ['Single Page', 'Ratios', 'Capital Structure', 'Directors and Auditor', 'Capital History', 'Dividend History', 'ESOP'];
+
+// Fetch the Forensic_DetailedTables data for a mode and render. Cache hit →
+// render instantly (no refetch). Guarded against stale responses by id+mode.
+async function loadForensicSinglePage(mode) {
+  const fp = state.company.fp;
+  const cid = resolveCompanyId(state.company.data);
+  fp.mode = mode;
+  if (!cid) { fp.loading = false; fp.error = 'Company id not available for this selection.'; renderForensicPage(); return; }
+  // Cache hit — instant Consolidated⇄Standalone switch.
+  if (fp.data[mode]) { fp.loading = false; fp.error = null; renderForensicPage(); return; }
+
+  if (fp.abortController) fp.abortController.abort();
+  fp.abortController = new AbortController();
+  const signal = fp.abortController.signal;
+  const reqCid = String(cid);
+  fp.loading = true; fp.error = null;
+  renderForensicPage();
+  try {
+    const res = await fetch(FORENSIC_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      // CompanyId (lowercase "d") mapped from the search result's CompanyID.
+      body: JSON.stringify({ CompanyId: reqCid, type: mode }),
+      signal,
+    });
+    if (signal.aborted) return;
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const json = await res.json();
+    if (signal.aborted) return;
+    // Company changed mid-flight — drop this response.
+    if (String(resolveCompanyId(state.company.data)) !== reqCid) return;
+    if (!json || json.status !== 1) throw new Error((json && json.msg) || 'API failure');
+    fp.data[mode] = Array.isArray(json.Data) ? json.Data : [];
+    fp.buttonStatus = (json.button_status && typeof json.button_status === 'object')
+      ? { con: !!json.button_status.con, std: !!json.button_status.std }
+      : { con: true, std: true };
+    fp.loading = false;
+    renderForensicPage();
+  } catch (e) {
+    if (signal.aborted || (e && e.name === 'AbortError')) return;
+    fp.loading = false;
+    fp.error = (e && e.message) || 'Network error';
+    renderForensicPage();
+  }
+}
+
+function renderForensicPage() {
+  const host = document.getElementById('forensicPage');
+  if (!host) return;
+  const fp = state.company.fp;
+  const bs = fp.buttonStatus || { con: true, std: true };
+
+  const tabsHtml = FP_TABS.map((name, i) => {
+    const isActive = i === 0;                       // only Single Page is live
+    return '<button type="button" class="fp-tab' + (isActive ? ' active' : '') + '"'
+      + (isActive ? '' : ' disabled aria-disabled="true"')
+      + ' data-fptab="' + i + '">' + escapeHtml(name) + '</button>';
+  }).join('');
+
+  const modesHtml = '<div class="fp-modes" role="tablist" aria-label="Statement type">'
+    + '<button type="button" class="fp-mode' + (fp.mode === 'con' ? ' active' : '') + '" data-fpmode="con"' + (bs.con ? '' : ' disabled') + '>Consolidated</button>'
+    + '<button type="button" class="fp-mode' + (fp.mode === 'std' ? ' active' : '') + '" data-fpmode="std"' + (bs.std ? '' : ' disabled') + '>Standalone</button>'
+    + '</div>';
+
+  let body;
+  if (fp.loading)      body = '<div class="fr-loading"><div class="fr-loading-text">Loading forensic tables…</div></div>';
+  else if (fp.error)   body = '<div class="fr-error"><p>' + escapeHtml(fp.error) + '</p><button type="button" class="fp-retry" data-fpretry>Retry</button></div>';
+  else                 body = renderForensicPageTables();
+
+  host.innerHTML =
+    '<nav class="fp-tabs" role="tablist" aria-label="Forensic sections">' + tabsHtml + '</nav>'
+    + '<div class="fp-singlepage">' + modesHtml
+    + '<div class="fp-tables cv-forensic">' + body + '</div>'
+    + '</div>';
+  wireForensicPage();
+}
+
+// Snapshot first, then the sticky jump-chips bar, then the remaining tables.
+function renderForensicPageTables() {
+  const fp = state.company.fp;
+  const data = fp.data[fp.mode] || [];
+  if (!data.length) return '<div class="fr-placeholder"><p>No forensic data available for this company.</p></div>';
+
+  const sectionHtml = (tab, i) => {
+    const name = displayForensicTabName(tab.tabName);
+    const content = (Array.isArray(tab.tableContent) && tab.tableContent.length > 0)
+      ? renderForensicCardGrid(tab)
+      : renderForensicTimeSeriesTable(tab);
+    // ShareHolding Pattern gets a Quarterly / Yearly toggle on the heading line
+    // (right-aligned). Other tables just have a plain title.
+    const isSh = /shareholding\s*pattern/i.test(String(tab.tabName || ''));
+    let head;
+    if (isSh) {
+      const y = !!(fp && fp.shYearly);
+      head = '<div class="fp-sec-head"><h3 class="fp-sec-title">' + escapeHtml(name) + '</h3>'
+        + '<div class="fp-shtoggle" role="tablist" aria-label="Period">'
+        + '<button type="button" class="fp-shbtn' + (!y ? ' active' : '') + '" data-shview="q">Quarterly</button>'
+        + '<button type="button" class="fp-shbtn' + (y ? ' active' : '') + '" data-shview="y">Yearly</button>'
+        + '</div></div>';
+    } else {
+      head = '<h3 class="fp-sec-title">' + escapeHtml(name) + '</h3>';
+    }
+    return '<section class="fp-section" id="fp-sec-' + i + '">' + head + content + '</section>';
+  };
+
+  const chips = '<nav class="fp-chips" aria-label="Jump to table">'
+    + data.map((tab, i) => '<button type="button" class="fp-chip" data-fpjump="fp-sec-' + i + '">'
+        + escapeHtml(displayForensicTabName(tab.tabName)) + '</button>').join('')
+    + '</nav>';
+
+  const first = data.length ? sectionHtml(data[0], 0) : '';
+  const rest  = data.slice(1).map((tab, i) => sectionHtml(tab, i + 1)).join('');
+  return first + chips + rest;   // chips sit BELOW the Snapshot table
+}
+
+function wireForensicPage() {
+  const host = document.getElementById('forensicPage');
+  if (!host) return;
+  // Consolidated / Standalone toggle.
+  host.querySelectorAll('.fp-mode[data-fpmode]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.disabled) return;
+      const m = btn.dataset.fpmode;
+      if (m === state.company.fp.mode && state.company.fp.data[m]) return;
+      loadForensicSinglePage(m);
+    });
+  });
+  // Jump chips → smooth-scroll to the table section.
+  host.querySelectorAll('.fp-chip[data-fpjump]').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const el = document.getElementById(chip.dataset.fpjump);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+  // ShareHolding Pattern Quarterly / Yearly toggle.
+  host.querySelectorAll('.fp-shbtn[data-shview]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const yearly = btn.dataset.shview === 'y';
+      if (!!(state.company.fp && state.company.fp.shYearly) === yearly) return;
+      if (state.company.fp) state.company.fp.shYearly = yearly;
+      renderForensicPage();
+    });
+  });
+  // Retry after an error.
+  const retry = host.querySelector('[data-fpretry]');
+  if (retry) retry.onclick = () => loadForensicSinglePage(state.company.fp.mode);
+  // The 6 placeholder tabs are disabled; no handlers needed.
+}
+
+// Reset Single Page state for a freshly-selected company and load Consolidated.
+function startForensicSinglePage() {
+  state.company.fp = { mode: 'con', data: { con: null, std: null }, loading: false, error: null, buttonStatus: { con: true, std: true }, abortController: null, shYearly: false };
+  const host = document.getElementById('forensicPage');
+  if (host) host.hidden = false;
+  loadForensicSinglePage('con');
+}
+
+// Reset a chip's link affordances back to a plain (non-clickable) chip.
+function resetExchangeChip(chip) {
+  if (!chip) return;
+  chip.classList.remove('chip-link');
+  chip.removeAttribute('role');
+  chip.removeAttribute('tabindex');
+  chip.removeAttribute('title');
+  chip.onclick = null;
+  chip.onkeydown = null;
+}
+
+// Set a ticker chip's label and, when a valid http(s) link is present, make
+// it a keyboard-accessible deep-link that opens the exchange page in a NEW
+// tab. No link → a plain chip (keeps the current chip colour/style either way).
+function setExchangeChip(chip, prefix, code, link) {
+  if (!chip) return;
+  if (!code) { chip.hidden = true; resetExchangeChip(chip); return; }
+  chip.hidden = false;
+  chip.textContent = prefix + ': ' + code;
+  const url = (link && /^https?:\/\//i.test(String(link).trim())) ? String(link).trim() : '';
+  if (!url) { resetExchangeChip(chip); return; }
+  const open = () => window.open(url, '_blank', 'noopener,noreferrer');
+  chip.classList.add('chip-link');
+  chip.setAttribute('role', 'link');
+  chip.setAttribute('tabindex', '0');
+  chip.title = 'Open on ' + prefix;
+  chip.onclick = open;
+  chip.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } };
 }
 
 function onSearchKeydown(e) {
@@ -4623,6 +4939,13 @@ state.company = {
   data: null,
   tab: 'overview',
   shellBuilt: false,
+  headerOnly: false,   // Forensic page shows only the .co-header card (no tabs/panes/forensic API)
+  // companynote enrichment for the Forensic header card. `companyId` is the
+  // id we requested so a late response for a previous company is ignored.
+  note: { companyId: null, data: null },
+  // Forensic PAGE "Single Page" tab (separate from the normal company view's
+  // Forensic tab). con/std data is cached per mode for instant toggling.
+  fp: { mode: 'con', data: { con: null, std: null }, loading: false, error: null, buttonStatus: { con: true, std: true }, abortController: null, shYearly: false },
   // Forensic-tab sub-state. The Forensic tab is itself a mini-app with
   // a Single Page sub-tab and Consolidated / Standalone mode pills, so
   // it gets its own little reducer-ish block. `data[mode]` holds the
@@ -4673,29 +4996,63 @@ function writeSettings() {
 
 /* ---- View router ---- */
 function showView(name) {
-  // Three sibling .content blocks live under <main>. The router toggles
-  // `hidden` on each so exactly one is visible. Anything outside the
-  // three (topbar, sidebar) stays mounted — they're shared chrome.
-  const valid = ['daily', 'settings', 'company'];
+  // Sibling .content blocks live under <main>. The router toggles `hidden`
+  // on each so exactly one is visible. Anything outside them (topbar,
+  // sidebar) stays mounted — they're shared chrome.
+  const valid = ['daily', 'settings', 'company', 'forensic'];
   const target = valid.indexOf(name) >= 0 ? name : 'daily';
   state.view = target;
+
+  // Forensic flow flag. Entering Forensic arms "forensic intent" so the next
+  // company picked from the top search opens on the Forensic tab. Leaving to
+  // a normal page (Daily Reading / Settings) disarms it; opening a Company
+  // page leaves it as-is so a pick made from the Forensic landing stays in
+  // the forensic flow.
+  if (target === 'forensic') state.forensicMode = true;
+  else if (target === 'daily' || target === 'settings') state.forensicMode = false;
+
   const dailyEl    = document.getElementById('dailyView');
   const settingsEl = document.getElementById('settingsView');
   const companyEl  = document.getElementById('companyView');
+  const forensicEl = document.getElementById('forensicView');
   if (dailyEl)    dailyEl.hidden    = (target !== 'daily');
   if (settingsEl) settingsEl.hidden = (target !== 'settings');
   if (companyEl)  companyEl.hidden  = (target !== 'company');
+  if (forensicEl) forensicEl.hidden = (target !== 'forensic');
 
-  // Sidebar active-state — sibling nav-items in the same group get reset
-  // and only the one matching data-view becomes active. Company view has
-  // no matching nav-item, so all sidebar items deactivate (which reads as
-  // "you're on a sub-page off the main nav" — intentional).
+  // Sidebar active-state — only the nav-item matching data-view is active.
+  // The Company view has no matching nav-item, so all items deactivate —
+  // EXCEPT when we're in the forensic flow, where the Company page is the
+  // forensic result, so the Forensic nav stays highlighted.
   document.querySelectorAll('.sidebar .nav-item[data-view]').forEach(el => {
     el.classList.toggle('active', el.dataset.view === target);
   });
+  if (state.forensicMode && target === 'company') {
+    const fnav = document.querySelector('.sidebar .nav-item[data-view="forensic"]');
+    if (fnav) fnav.classList.add('active');
+  }
 
   if (target === 'settings') renderSettingsPanel();
   if (target === 'company')  renderCompanyView();
+  if (target === 'forensic') {
+    // Drop focus into the top search so the user can type a company
+    // immediately, matching "select a company from the search bar above".
+    const gs = document.getElementById('globalSearchInput');
+    if (gs) { try { gs.focus(); } catch (_) {} }
+  }
+
+  // Give each named top-level view a stable URL hash. Daily Reading is the
+  // site HOME page ("#home"); Forensic gets "#forensic"; the Company sub-page
+  // clears the hash since it's reached by selecting a company, not a route.
+  // replaceState (not location.hash =) means no scroll jump, no history spam,
+  // and it does NOT fire the hashchange listener, so there's no routing loop.
+  try {
+    const hashFor = { daily: '#home', settings: '#settings', forensic: '#forensic', company: '' };
+    const want = hashFor[target] != null ? hashFor[target] : '';
+    if ((location.hash || '') !== want) {
+      history.replaceState(null, '', location.pathname + location.search + want);
+    }
+  } catch (_) { /* history API unavailable — navigation still works */ }
   // Re-evaluate the floating "back to categories" FAB. Without this, the
   // FAB would only refresh on next scroll, leaving a stale orange bubble
   // hanging over Settings or Company right after a view switch.
@@ -4831,6 +5188,16 @@ function renderCompanyView() {
     wireCompanyTabs();
   }
   renderCompanyDynamic();
+  // Forensic page = header-only: hide the tab bar + panes (CSS via this
+  // class) and skip the chart build entirely. Only the .co-header card —
+  // name, badges, sector/industry/ISIN, description, live-price panel —
+  // remains. The normal company page clears the class and renders fully.
+  const cv = document.getElementById('companyView');
+  if (cv) cv.classList.toggle('cv-header-only', !!state.company.headerOnly);
+  // The Forensic page's Single Page section lives only in the forensic flow.
+  const fpEl = document.getElementById('forensicPage');
+  if (fpEl) fpEl.hidden = !state.company.headerOnly;
+  if (state.company.headerOnly) return;
   // Charts depend on Chart.js being loaded. The script tag has `defer`,
   // so on first reveal it may still be in flight; poll briefly.
   ensureCompanyCharts();
@@ -5144,20 +5511,20 @@ function renderCompanyDynamic() {
     if (c.BSECode)   { bseChip.textContent = 'BSE: ' + c.BSECode; bseChip.hidden = false; }
     else             { bseChip.hidden = true; }
   }
+  // Reset any link affordances from a previous (Forensic) open so the normal
+  // company page shows plain chips. The Forensic flow re-applies links via
+  // applyForensicNote() once companynote returns.
+  resetExchangeChip(nseChip);
+  resetExchangeChip(bseChip);
 
-  // Sector / industry meta — keep dots only between adjacent items that are present
-  const metaEl = document.getElementById('cvMeta');
-  if (metaEl) {
-    const parts = [];
-    if (c.Sector)   parts.push(`<span>Sector · ${escapeHtml(c.Sector)}</span>`);
-    if (c.Industry) parts.push(`<span>Industry · ${escapeHtml(c.Industry)}</span>`);
-    if (c.ISIONNo)  parts.push(`<span>ISIN · ${escapeHtml(c.ISIONNo)}</span>`);
-    metaEl.innerHTML = parts.join('<span class="dot"></span>');
-  }
+  // Sector / Industry / ISIN meta line (+ website link first, on the Forensic
+  // card). Single source of truth — see renderCompanyMeta().
+  renderCompanyMeta();
 
-  // Description placeholder — real per-company copy goes here later
+  // Description — placeholder copy for the normal company page. The Forensic
+  // card removes the description entirely (skipped here, hidden via CSS).
   const descEl = document.getElementById('cvDesc');
-  if (descEl) {
+  if (descEl && !state.company.headerOnly) {
     descEl.textContent = `${c.CompanyName || 'This company'} · ${c.Sector || 'sector'} ${c.Industry ? '/ ' + c.Industry : ''}. Per-company description text will be wired to the data API in a later pass.`;
   }
 
@@ -6086,8 +6453,16 @@ function renderShareHoldingCard(card) {
   // no subtitle at all if the tab is missing or empty.
   let latestPeriodText = '';
   try {
-    const f = (typeof state !== 'undefined' && state.company) ? state.company.forensic : null;
-    const allTabs = (f && f.data && f.data[f.mode]) ? f.data[f.mode] : [];
+    // Prefer the Single Page dataset (state.company.fp) when the Forensic
+    // page is showing; otherwise fall back to the normal company view's
+    // forensic state. Both shape data[mode] as the array of tabs.
+    const co = (typeof state !== 'undefined' && state.company) ? state.company : null;
+    const fp = co && co.fp;
+    const f  = co && co.forensic;
+    const useFp = !!(co && co.headerOnly && fp && fp.data && fp.data[fp.mode]);
+    const allTabs = useFp
+      ? fp.data[fp.mode]
+      : ((f && f.data && f.data[f.mode]) ? f.data[f.mode] : []);
     const patternTab = allTabs.find(t =>
       /shareholding\s*pattern/i.test(String(t.tabName || ''))
     );
@@ -6101,7 +6476,7 @@ function renderShareHoldingCard(card) {
         const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
         const m = parseInt(latest.substring(4, 6), 10);
         latestPeriodText = (latest.length === 6 && m >= 1 && m <= 12)
-          ? `${months[m - 1]} ${latest.substring(0, 4)}`
+          ? `${months[m - 1]}-${latest.substring(0, 4)}`
           : latest;
       }
     }
@@ -6110,8 +6485,7 @@ function renderShareHoldingCard(card) {
   return `
     <div class="fr-card-mini fr-card-sh">
       <div class="fr-card-title">
-        <h4>Shareholding (%)</h4>
-        ${latestPeriodText ? `<span class="fr-card-sub">${escapeHtml(latestPeriodText)}</span>` : ''}
+        <h4>Shareholding (%)${latestPeriodText ? ` <span class="fr-sh-period">${escapeHtml(latestPeriodText)}</span>` : ''}</h4>
       </div>
       <div class="fr-sh-body">
         <svg viewBox="0 0 ${size} ${size}" class="fr-sh-pie" role="img" aria-label="Shareholding breakdown pie chart">
@@ -6221,7 +6595,7 @@ function renderForensicCardGrid(tab) {
     const bodyRows = allPeriods.map(p => {
       const cells = eligible.map(c => {
         const entry = c.entries.find(e => e.period === p);
-        return `<div class="v">${entry ? escapeHtml(entry.value) : '<span class="fr-na">—</span>'}</div>`;
+        return `<div class="v">${entry ? escapeHtml(bracketNegative(entry.value)) : '<span class="fr-na">—</span>'}</div>`;
       }).join('');
       const isTtm = (p === 'TTM');
       return `<div class="fr-margin-row${isTtm ? ' fr-margin-row-ttm' : ''}"><div class="lbl">${escapeHtml(p)}</div>${cells}</div>`;
@@ -6260,7 +6634,7 @@ function renderForensicCardGrid(tab) {
         const rowHtml = rows.map(cells => {
           const lbl = cells[0] && cells[0].column != null ? cells[0].column : '';
           const val = cells[1] && cells[1].column != null ? cells[1].column : '';
-          return `<div class="fr-card-mini-row"><span class="lbl">${escapeHtml(lbl)}</span><span class="v">${escapeHtml(val)}</span></div>`;
+          return `<div class="fr-card-mini-row"><span class="lbl">${escapeHtml(lbl)}</span><span class="v">${escapeHtml(bracketNegative(val))}</span></div>`;
         }).join('');
         return `
           <div class="fr-card-mini">
@@ -6287,7 +6661,7 @@ function renderForensicCardGrid(tab) {
       const rowHtml = rows.map(cells => {
         const lbl = cells[0] && cells[0].column != null ? cells[0].column : '';
         const val = cells[1] && cells[1].column != null ? cells[1].column : '';
-        return `<div class="fr-card-mini-row"><span class="lbl">${escapeHtml(lbl)}</span><span class="v">${escapeHtml(val)}</span></div>`;
+        return `<div class="fr-card-mini-row"><span class="lbl">${escapeHtml(lbl)}</span><span class="v">${escapeHtml(bracketNegative(val))}</span></div>`;
       }).join('');
       return `
         <div class="fr-card-mini">
@@ -6305,6 +6679,29 @@ function renderForensicCardGrid(tab) {
   if (!html) html = '<div class="fr-placeholder"><p>No card data for this category.</p></div>';
 
   return html;
+}
+
+// Wrap a negative numeric display value in parentheses, e.g. "-45.90" →
+// "(-45.90)" and "−364.64" → "(−364.64)". Non-negative values, blanks, and
+// already-bracketed accounting values are returned unchanged.
+function bracketNegative(v) {
+  const s = String(v == null ? '' : v).trim();
+  if (!s) return s;
+  if (/^\(.*\)$/.test(s)) return s;          // already bracketed
+  if (/^[-−]\s*\d/.test(s)) return '(' + s + ')';
+  return s;
+}
+
+// Label for the trailing summary-column group (3yrs / 5yrs / 10yrs). For most
+// tables this is a true CAGR; a few tables use cumulative sums or averages, so
+// the group header is renamed per the table it belongs to.
+function cagrGroupLabel(tabName) {
+  const n = String(tabName || '').toLowerCase();
+  if (n.includes('fund flow')) return 'Cumulative';
+  if (n.includes('working capital')) return 'Averages';
+  if (n.includes('asset efficiency')) return 'Cumulative/Average';
+  if (n.includes('expense analysis')) return 'Cumulative/Average';
+  return 'CAGR';
 }
 
 function renderForensicTimeSeriesTable(tab) {
@@ -6357,16 +6754,28 @@ function renderForensicTimeSeriesTable(tab) {
     return pa - pb;
   });
 
-  const yyyymmCount = yyyymmRows.length;
+  // ShareHolding Pattern (Single Page only): a Quarterly / Yearly toggle.
+  // Yearly keeps only the March (…03) columns — the fiscal year-ends.
+  const isShPattern = /shareholding\s*pattern/i.test(String(tab.tabName || ''));
+  const onSinglePage = !!(typeof state !== 'undefined' && state.company && state.company.headerOnly);
+  const shYearly = onSinglePage && isShPattern && !!(state.company.fp && state.company.fp.shYearly);
+  const displayPeriods = shYearly
+    ? yyyymmRows.filter(r => /03$/.test(String(r.description || '').trim()))
+    : yyyymmRows;
+
+  const yyyymmCount = displayPeriods.length;
   const cagrCount   = cagrRows.length;
 
   // ---- Column headers ---------------------------------------------
-  const dateColHeaders = yyyymmRows.map(row =>
+  const dateColHeaders = displayPeriods.map(row =>
     `<th>${escapeHtml(String(row.description || ''))}</th>`
   ).join('');
-  const cagrColHeaders = cagrRows.map(row =>
-    `<th class="fr-cagr-col">${escapeHtml(String(row.description || ''))}</th>`
-  ).join('');
+  // CAGR / Cumulative / Average sub-columns — normalized to "3yrs/5yrs/10yrs".
+  const cagrColHeaders = cagrRows.map(row => {
+    const d = String(row.description || '').trim();
+    const m = d.match(/(\d+)/);
+    return `<th class="fr-cagr-col">${escapeHtml(m ? m[1] + 'yrs' : d)}</th>`;
+  }).join('');
 
   // ---- Body rows (one per metric) ---------------------------------
   const tbody = activeRows.map(key => {
@@ -6376,7 +6785,7 @@ function renderForensicTimeSeriesTable(tab) {
       : '';
     const metricName = m.name || ('Col ' + key.slice(3));
 
-    const dateCells = yyyymmRows.map(row => {
+    const dateCells = displayPeriods.map(row => {
       const cell = parseForensicCell(row[key]);
       // Auto-detect negative numbers from the display value itself
       // (independent of any API color hint). Catches "-12.5", "-3%",
@@ -6385,7 +6794,7 @@ function renderForensicTimeSeriesTable(tab) {
       const looksNegative = /^[-−]\s*\d/.test(v) || /^\(\s*\d[^)]*\)\s*$/.test(v);
       const negNumCls = looksNegative ? ' fr-neg-num' : '';
       const tintCls = cell.tint === 'pos' ? ' fr-pos' : (cell.tint === 'neg' ? ' fr-neg' : '');
-      return `<td class="${(tintCls + negNumCls).trim()}">${escapeHtml(cell.value)}</td>`;
+      return `<td class="${(tintCls + negNumCls).trim()}">${escapeHtml(bracketNegative(cell.value))}</td>`;
     }).join('');
 
     const cagrCells = cagrRows.map(row => {
@@ -6400,7 +6809,7 @@ function renderForensicTimeSeriesTable(tab) {
       const tintCls = cell.tint === 'neg' ? ' fr-neg'
                     : (cell.tint === 'pos' ? ' fr-pos' : '');
       const cls = hasValue ? `fr-cagr-col${tintCls}${negNumCls}` : '';
-      return `<td class="${cls.trim()}">${escapeHtml(cell.value)}</td>`;
+      return `<td class="${cls.trim()}">${escapeHtml(bracketNegative(cell.value))}</td>`;
     }).join('');
 
     return `<tr>
@@ -6418,7 +6827,7 @@ function renderForensicTimeSeriesTable(tab) {
     ? `<tr class="fr-thead-super">
          <th class="fr-th-period fr-th-super-blank" rowspan="2">Description</th>
          ${yyyymmCount > 0 ? `<th class="fr-th-super-blank" colspan="${yyyymmCount}"></th>` : ''}
-         <th class="fr-cagr-super" colspan="${cagrCount}">CAGR</th>
+         <th class="fr-cagr-super" colspan="${cagrCount}">${escapeHtml(cagrGroupLabel(tab.tabName))}</th>
        </tr>
        <tr>
          ${dateColHeaders}
@@ -6429,9 +6838,16 @@ function renderForensicTimeSeriesTable(tab) {
          ${dateColHeaders}
        </tr>`;
 
+  // Fund Flow, Expense Analysis, Asset efficiency & Working capital analysis:
+  // the trailing summary columns are NOT a blanket-green block — only the
+  // API-flagged condition cells carry colour. (For Working capital this leaves
+  // the 10yr baseline column neutral, since the API only flags 3yr/5yr.)
+  const condClass = /fund flow|expense analysis|asset efficiency|working capital/i.test(String(tab.tabName || ''))
+    ? ' fr-cagr-conditional' : '';
+
   return `
     <div class="fr-table-scroll">
-      <table class="fr-table fr-table-transposed">
+      <table class="fr-table fr-table-transposed${condClass}">
         <thead>
           ${superHeader}
         </thead>
@@ -8254,6 +8670,50 @@ function handleAvatarFile(file) {
   });
 })();
 
+/* ---- Branding area = home button ----
+   Clicking the logo/wordmark (or pressing Enter/Space when it's focused)
+   navigates to the Daily Reading HOME page, the same destination as the
+   "Daily Reading" nav item. This is the familiar "logo goes home" pattern. */
+(function wireBrandHome() {
+  const brand = document.querySelector('.sidebar .brand[data-home]');
+  if (!brand) return;
+  const goHome = () => showView('daily');
+  brand.addEventListener('click', goHome);
+  brand.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goHome(); }
+  });
+})();
+
+/* ---- Forensic landing CTA ----
+   The "Select a company" button on the Forensic empty state just drops focus
+   into the top search bar, where the existing global-search flow takes over;
+   picking a result opens that company's Forensic tab (see selectCompany). */
+(function wireForensicLanding() {
+  const cta = document.getElementById('forensicSearchCta');
+  if (!cta) return;
+  cta.addEventListener('click', () => {
+    const gs = document.getElementById('globalSearchInput');
+    if (gs) { try { gs.focus(); } catch (_) {} }
+  });
+})();
+
+/* ---- Hash routing for the named top-level pages ----
+   Lets the home page be reached/linked as "#home" (and Settings as
+   "#settings"). The INITIAL route runs at the very end of init (after the
+   FAB and views exist), because showView() touches the FAB. Here we only
+   attach the listener for later hash changes. showView() uses
+   history.replaceState, which does not fire hashchange, so this never loops. */
+function viewForHash(h) {
+  const clean = String(h || '').replace(/^#/, '').toLowerCase();
+  if (clean === 'settings') return 'settings';
+  if (clean === 'forensic') return 'forensic';
+  return 'daily';   // '#home', empty, or anything unknown → home
+}
+window.addEventListener('hashchange', () => {
+  const target = viewForHash(location.hash);
+  if (target !== state.view) showView(target);
+});
+
 /* ---- Settings sub-tab wiring ---- */
 (function wireSettingsTabs() {
   const tabs = document.getElementById('settingsTabs');
@@ -8529,5 +8989,10 @@ if (document.fonts && document.fonts.ready) {
 if (state.tab === 'announcements') loadAnnouncements(false);
 // Start the 5-minute auto-refresh + the relative-time caption tick.
 startAnnAutoRefresh();
+
+// Initial route — runs last, so showView() (which touches the FAB) is safe.
+// A fresh open or "#home" lands on the Daily Reading HOME page; "#settings"
+// deep-links to Settings. This also stamps "#home" onto a hash-less URL.
+showView(viewForHash(location.hash));
 
 }
